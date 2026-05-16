@@ -22,7 +22,11 @@ import {
   deleteCar,
   addTrip,
   updateTrip,
-  deleteTrip
+  deleteTrip,
+  addFixedCost,
+  updateFixedCost,
+  deleteFixedCost,
+  setFuel
 } from "./state.js";
 import { renderGantt } from "./gantt.js";
 import {
@@ -109,7 +113,9 @@ function renderApp() {
 
   const tabs = [
     ["kjoringer", "Kjoringer"],
-    ["biler", "Biler"]
+    ["biler", "Biler"],
+    ["faste", "Faste kostnader"],
+    ["drivstoff", "Drivstoff"]
   ];
   if (isAdmin) tabs.push(["brukere", "Brukere"]);
 
@@ -180,6 +186,8 @@ function renderContent() {
     return;
   }
   if (view === "biler") renderCars(content, dep);
+  else if (view === "faste") renderFixedCosts(content, dep);
+  else if (view === "drivstoff") renderFuel(content, dep);
   else renderKjoringer(content, dep);
 }
 
@@ -211,6 +219,8 @@ function renderCars(el, dep) {
 
 function carCard(c) {
   const k = c.costs || {};
+  const fuelLabel = c.fuelType === "el" ? "Elektrisk" : "Diesel";
+  const fuelUnit = c.fuelType === "el" ? "kWh/100km" : "l/100km";
   const rows = [
     ["Leasing", `${fmtKr(k.leasing)} /mnd`],
     ["Forsikring", `${fmtKr(k.insurance)} /mnd`],
@@ -218,6 +228,8 @@ function carCard(c) {
     ["Service", `${fmtKr(k.service)} /ar`],
     ["Dekk / dekkhotell", `${fmtKr(k.tires)} /ar`],
     ["Skade / erstatninger", fmtKr(k.damage)],
+    ["Drivstoff", fuelLabel],
+    ["Forbruk", `${fmtNum(c.consumption)} ${fuelUnit}`],
     ["Leasing startdato", esc(k.leasingStart || "–")],
     ["EU-kontroll", esc(k.euControl || "–")],
     ["Budsjettert km/ar", `${fmtNum(k.budgetKm)} km`]
@@ -276,8 +288,12 @@ function renderKjoringer(el, dep) {
 }
 
 function tripRow(t, dep) {
-  const assignedCar = (dep?.cars || []).find((c) => c.id === t.carId);
-  const carLabel = assignedCar ? esc(assignedCar.regNr) : "–";
+  const cars = dep?.cars || [];
+  const regs = tripCarIds(t)
+    .map((id) => cars.find((c) => c.id === id))
+    .filter(Boolean)
+    .map((c) => esc(c.regNr));
+  const carLabel = regs.length ? regs.join(", ") : "–";
   return `<tr>
     <td>${esc(t.customer || "(uten navn)")}</td>
     <td><span class="pill type-${esc(t.type || "annet")}">${
@@ -305,22 +321,44 @@ function tripRow(t, dep) {
 }
 
 function renderSummary(dep) {
-  const carCost = (dep.cars || []).reduce((s, c) => s + carMonthly(c), 0);
+  const cars = dep.cars || [];
+  const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
+  const carCost = cars.reduce((s, c) => s + carMonthly(c), 0);
+  const fixedCost = (dep.fixedCosts || []).reduce(
+    (s, f) => s + num(f.amount),
+    0
+  );
   let weekKm = 0;
   let weekRevenue = 0;
+  let fuelWeek = 0;
   (dep.trips || []).forEach((t) => {
     const occ = (t.days || []).length;
     const hours = durationMinutes(t.startTime, t.endTime) / 60;
-    weekKm += num(t.km) * occ;
-    weekRevenue += hours * num(t.revenuePerHour) * occ;
+    const assigned = tripCarIds(t)
+      .map((id) => cars.find((c) => c.id === id))
+      .filter(Boolean);
+    const m = Math.max(assigned.length, 1);
+    weekKm += num(t.km) * occ * m;
+    weekRevenue += hours * num(t.revenuePerHour) * occ * m;
+    assigned.forEach((c) => {
+      const price =
+        c.fuelType === "el"
+          ? num(fuel.electricityPrice)
+          : num(fuel.dieselPrice);
+      fuelWeek += num(t.km) * occ * (num(c.consumption) / 100) * price;
+    });
   });
+  const fuelMonth = fuelWeek * 4.33;
   const monthRevenue = weekRevenue * 4.33;
-  const result = monthRevenue - carCost;
+  const result = monthRevenue - carCost - fixedCost - fuelMonth;
   const cards = [
-    ["Biler", `${(dep.cars || []).length}`],
+    ["Biler", `${cars.length}`],
     ["Bilkostnad", `${fmtKr(carCost)} /mnd`],
+    ["Faste kostnader", `${fmtKr(fixedCost)} /mnd`],
+    ["Drivstoff", `${fmtKr(fuelMonth)} /mnd`],
     ["Km pr. uke", `${fmtNum(weekKm)} km`],
     ["Inntekt pr. uke", fmtKr(weekRevenue)],
+    ["Inntekt pr. virkedag", fmtKr(weekRevenue / 5)],
     ["Inntekt pr. mnd", fmtKr(monthRevenue)],
     [
       "Resultat pr. mnd",
@@ -332,6 +370,90 @@ function renderSummary(dep) {
       ([a, b]) => `<div class="stat"><span>${a}</span><strong>${b}</strong></div>`
     )
     .join("")}</div>`;
+}
+
+// ---- Faste kostnader -------------------------------------------------------
+function renderFixedCosts(el, dep) {
+  const items = dep.fixedCosts || [];
+  const sum = items.reduce((s, f) => s + num(f.amount), 0);
+  el.innerHTML = `
+    <div class="section-head">
+      <h2>Faste kostnader – ${esc(dep.name)}</h2>
+      <button class="btn primary" data-action="add-fixed">+ Ny kostnad</button>
+    </div>
+    ${
+      items.length
+        ? `<table class="list">
+            <thead><tr><th>Navn</th><th>Belop /mnd</th><th></th></tr></thead>
+            <tbody>
+              ${items
+                .map(
+                  (f) => `<tr>
+                <td>${esc(f.name || "(uten navn)")}</td>
+                <td>${fmtKr(f.amount)}</td>
+                <td class="row-actions">
+                  <button class="btn small" data-action="edit-fixed" data-id="${esc(
+                    f.id
+                  )}">Rediger</button>
+                  <button class="btn small ghost danger" data-action="del-fixed" data-id="${esc(
+                    f.id
+                  )}">Slett</button>
+                </td>
+              </tr>`
+                )
+                .join("")}
+            </tbody>
+            <tfoot><tr>
+              <td><strong>Sum</strong></td>
+              <td><strong>${fmtKr(sum)} /mnd</strong></td>
+              <td></td>
+            </tr></tfoot>
+          </table>`
+        : `<div class="card empty"><p>Ingen faste kostnader registrert.</p></div>`
+    }`;
+}
+
+// ---- Drivstoff -------------------------------------------------------------
+function renderFuel(el, dep) {
+  const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
+  const cars = dep.cars || [];
+  el.innerHTML = `
+    <div class="section-head">
+      <h2>Drivstoff – ${esc(dep.name)}</h2>
+      <button class="btn primary" data-action="edit-fuel">Rediger priser</button>
+    </div>
+    <div class="summary">
+      <div class="stat"><span>Dieselpris</span><strong>${fmtKr(
+        fuel.dieselPrice
+      )} /liter</strong></div>
+      <div class="stat"><span>Strompris</span><strong>${fmtKr(
+        fuel.electricityPrice
+      )} /kWh</strong></div>
+    </div>
+    <div class="section-head sub"><h3>Forbruk pr. bil</h3></div>
+    ${
+      cars.length
+        ? `<table class="list">
+            <thead><tr>
+              <th>Reg.nr</th><th>Modell</th><th>Drivstoff</th><th>Forbruk</th>
+            </tr></thead>
+            <tbody>
+              ${cars
+                .map(
+                  (c) => `<tr>
+                <td>${esc(c.regNr || "—")}</td>
+                <td>${esc(c.model || "")}</td>
+                <td>${c.fuelType === "el" ? "Elektrisk" : "Diesel"}</td>
+                <td>${fmtNum(c.consumption)} ${
+                    c.fuelType === "el" ? "kWh/100km" : "l/100km"
+                  }</td>
+              </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>`
+        : `<div class="card empty"><p>Ingen biler registrert. Forbruk og drivstofftype settes pa hver bil under «Biler».</p></div>`
+    }`;
 }
 
 // ---- Brukere (admin) -------------------------------------------------------
@@ -448,6 +570,30 @@ app.addEventListener("click", async (e) => {
       deleteTrip(dep, t.dataset.id);
       renderContent();
     }
+  } else if (action === "add-fixed" && dep) {
+    const res = await fixedCostModal();
+    if (res) {
+      addFixedCost(dep, res);
+      renderContent();
+    }
+  } else if (action === "edit-fixed" && dep) {
+    const item = (dep.fixedCosts || []).find((f) => f.id === t.dataset.id);
+    const res = await fixedCostModal(item);
+    if (res) {
+      updateFixedCost(dep, item.id, res);
+      renderContent();
+    }
+  } else if (action === "del-fixed" && dep) {
+    if (confirm("Slette denne kostnaden?")) {
+      deleteFixedCost(dep, t.dataset.id);
+      renderContent();
+    }
+  } else if (action === "edit-fuel" && dep) {
+    const res = await fuelModal(dep.fuel);
+    if (res) {
+      setFuel(dep, res);
+      renderContent();
+    }
   } else if (action === "add-user") {
     const res = await modal("Ny bruker", [
       { name: "username", label: "Brukernavn", type: "text", required: true },
@@ -545,6 +691,10 @@ function modal(title, fields) {
           out[f.name] = [
             ...form.querySelectorAll(`[name="${f.name}"]:checked`)
           ].map((c) => Number(c.value));
+        } else if (f.type === "multi") {
+          out[f.name] = [
+            ...form.querySelectorAll(`[name="${f.name}"]:checked`)
+          ].map((c) => c.value);
         } else {
           let v = form.querySelector(`[name="${f.name}"]`).value;
           if (f.type === "number") v = v === "" ? 0 : Number(v);
@@ -586,6 +736,23 @@ function fieldHtml(f) {
           }/> ${d.slice(0, 3)}</label>`
       ).join("")}</div></div>`;
   }
+  if (f.type === "multi") {
+    const set = new Set(f.value || []);
+    const opts = f.options || [];
+    if (!opts.length) {
+      return `<div class="days-field"><span>${esc(f.label)}</span>
+        <p class="muted" style="margin:.4rem 0 0">Ingen biler – legg til under «Biler».</p></div>`;
+    }
+    return `<div class="days-field"><span>${esc(f.label)}</span>
+      <div class="days">${opts
+        .map(
+          (o) =>
+            `<label class="day"><input type="checkbox" name="${f.name}" value="${esc(
+              o.value
+            )}" ${set.has(o.value) ? "checked" : ""}/> ${esc(o.label)}</label>`
+        )
+        .join("")}</div></div>`;
+  }
   const suffix = f.suffix ? `<span class="suffix">${esc(f.suffix)}</span>` : "";
   return `<label>${esc(f.label)}
     <span class="input-wrap"><input type="${f.type}" name="${f.name}"
@@ -600,6 +767,17 @@ function carModal(car) {
     { name: "regNr", label: "Reg.nr", type: "text", required: true, value: car?.regNr },
     { name: "model", label: "Merke / modell", type: "text", value: car?.model },
     { name: "description", label: "Beskrivelse", type: "text", value: car?.description },
+    {
+      name: "fuelType",
+      label: "Drivstoff",
+      type: "select",
+      value: car?.fuelType || "diesel",
+      options: [
+        { value: "diesel", label: "Diesel" },
+        { value: "el", label: "Elektrisk" }
+      ]
+    },
+    { name: "consumption", label: "Forbruk (per 100 km)", type: "number", value: car?.consumption },
     { name: "leasing", label: "Leasing (kr/mnd)", type: "number", value: k.leasing },
     { name: "insurance", label: "Forsikring (kr/mnd)", type: "number", value: k.insurance },
     { name: "service", label: "Service (kr/ar)", type: "number", value: k.service },
@@ -615,6 +793,8 @@ function carModal(car) {
       regNr: r.regNr,
       model: r.model,
       description: r.description,
+      fuelType: r.fuelType,
+      consumption: r.consumption,
       costs: {
         leasing: r.leasing,
         insurance: r.insurance,
@@ -631,16 +811,13 @@ function carModal(car) {
 }
 
 function tripModal(trip, dep) {
-  const carOptions = [
-    { value: "", label: "Ingen bil" },
-    ...(dep?.cars || [])
-      .slice()
-      .sort((a, b) => (a.regNr || "").localeCompare(b.regNr || ""))
-      .map((c) => ({
-        value: c.id,
-        label: c.regNr + (c.model ? " – " + c.model : "")
-      }))
-  ];
+  const carOptions = (dep?.cars || [])
+    .slice()
+    .sort((a, b) => (a.regNr || "").localeCompare(b.regNr || ""))
+    .map((c) => ({
+      value: c.id,
+      label: c.regNr + (c.model ? " – " + c.model : "")
+    }));
   return modal(trip ? "Rediger kjoring" : "Ny kjoring", [
     { name: "customer", label: "Kundenavn", type: "text", required: true, value: trip?.customer },
     {
@@ -663,7 +840,7 @@ function tripModal(trip, dep) {
         { value: "dobbel", label: "Dobbel" }
       ]
     },
-    { name: "carId", label: "Bil", type: "select", value: trip?.carId || "", options: carOptions },
+    { name: "carIds", label: "Biler", type: "multi", value: tripCarIds(trip || {}), options: carOptions },
     { name: "startTime", label: "Starttidspunkt", type: "time", required: true, value: trip?.startTime || "08:00" },
     { name: "endTime", label: "Sluttidspunkt", type: "time", required: true, value: trip?.endTime || "16:00" },
     { name: "days", label: "Faste dager", type: "days", value: trip?.days || [] },
@@ -672,6 +849,26 @@ function tripModal(trip, dep) {
   ]);
 }
 
+function fixedCostModal(item) {
+  return modal(item ? "Rediger kostnad" : "Ny fast kostnad", [
+    { name: "name", label: "Navn (f.eks. husleie)", type: "text", required: true, value: item?.name },
+    { name: "amount", label: "Belop (kr/mnd)", type: "number", value: item?.amount }
+  ]);
+}
+
+function fuelModal(fuel) {
+  const f = fuel || {};
+  return modal("Drivstoffpriser", [
+    { name: "dieselPrice", label: "Dieselpris (kr/liter)", type: "number", value: f.dieselPrice },
+    { name: "electricityPrice", label: "Strompris (kr/kWh)", type: "number", value: f.electricityPrice }
+  ]);
+}
+
 function num(v) {
   return Number(v) || 0;
+}
+
+function tripCarIds(t) {
+  if (Array.isArray(t.carIds)) return t.carIds;
+  return t.carId ? [t.carId] : [];
 }

@@ -14,6 +14,11 @@ const TOTAL_MINS = 10080; // 7 × 1440
 const TYPE_LABEL = { fast_rute: "Fast rute", annet: "Annet" };
 const STAFF_LABEL = { enkelt: "Enkelt", dobbel: "Dobbel" };
 
+function tripCarIds(t) {
+  if (Array.isArray(t.carIds)) return t.carIds;
+  return t.carId ? [t.carId] : [];
+}
+
 function tripTooltip(trip) {
   const mins = durationMinutes(trip.startTime, trip.endTime);
   const hours = mins / 60;
@@ -118,7 +123,7 @@ export function renderGantt(dep) {
 
   const carRows = cars
     .map((car) => {
-      const carTrips = trips.filter((t) => t.carId === car.id);
+      const carTrips = trips.filter((t) => tripCarIds(t).includes(car.id));
       return `<div class="gantt-row">
         <div class="car-label">
           <span class="car-regnr">${esc(car.regNr || "—")}</span>
@@ -129,7 +134,7 @@ export function renderGantt(dep) {
     })
     .join("");
 
-  const unassigned = trips.filter((t) => !t.carId);
+  const unassigned = trips.filter((t) => tripCarIds(t).length === 0);
   const unassignedRow =
     unassigned.length > 0
       ? `<div class="gantt-row gantt-unassigned">

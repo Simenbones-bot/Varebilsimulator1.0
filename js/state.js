@@ -21,8 +21,24 @@ export async function loadData(username) {
   if (data.selectedDepartmentId === undefined) {
     data.selectedDepartmentId = data.departments[0]?.id || null;
   }
+  data.departments.forEach(normalizeDepartment);
   State.data = data;
   return data;
+}
+
+// Sikrer at eldre data far nye felter (carIds, fixedCosts, fuel).
+function normalizeDepartment(dep) {
+  if (!Array.isArray(dep.cars)) dep.cars = [];
+  if (!Array.isArray(dep.trips)) dep.trips = [];
+  if (!Array.isArray(dep.fixedCosts)) dep.fixedCosts = [];
+  if (!dep.fuel || typeof dep.fuel !== "object") {
+    dep.fuel = { dieselPrice: 0, electricityPrice: 0 };
+  }
+  dep.trips.forEach((t) => {
+    if (!Array.isArray(t.carIds)) {
+      t.carIds = t.carId ? [t.carId] : [];
+    }
+  });
 }
 
 let saveTimer = null;
@@ -46,7 +62,14 @@ export function selectedDepartment() {
 }
 
 export function addDepartment(name) {
-  const dep = { id: uid(), name: name.trim(), cars: [], trips: [] };
+  const dep = {
+    id: uid(),
+    name: name.trim(),
+    cars: [],
+    trips: [],
+    fixedCosts: [],
+    fuel: { dieselPrice: 0, electricityPrice: 0 }
+  };
   State.data.departments.push(dep);
   State.data.selectedDepartmentId = dep.id;
   save();
@@ -95,5 +118,27 @@ export function updateTrip(dep, id, trip) {
 
 export function deleteTrip(dep, id) {
   dep.trips = dep.trips.filter((t) => t.id !== id);
+  save();
+}
+
+export function addFixedCost(dep, item) {
+  if (!Array.isArray(dep.fixedCosts)) dep.fixedCosts = [];
+  dep.fixedCosts.push({ id: uid(), ...item });
+  save();
+}
+
+export function updateFixedCost(dep, id, item) {
+  const idx = dep.fixedCosts.findIndex((c) => c.id === id);
+  if (idx !== -1) dep.fixedCosts[idx] = { ...dep.fixedCosts[idx], ...item };
+  save();
+}
+
+export function deleteFixedCost(dep, id) {
+  dep.fixedCosts = (dep.fixedCosts || []).filter((c) => c.id !== id);
+  save();
+}
+
+export function setFuel(dep, fuel) {
+  dep.fuel = { ...(dep.fuel || {}), ...fuel };
   save();
 }
