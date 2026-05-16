@@ -1,4 +1,4 @@
-// Ukesoversikt (Gantt): én rad per bil, X-akse Man 00:00 – Son 23:59.
+// Ukesoversikt (Gantt): én rad per bil, X-akse Man 00:00 – Søn 23:59.
 
 import {
   DAYS,
@@ -19,6 +19,16 @@ function tripCarIds(t) {
   return t.carId ? [t.carId] : [];
 }
 
+function carUtilization(car, trips) {
+  let bookedMins = 0;
+  trips.forEach((t) => {
+    if (!tripCarIds(t).includes(car.id)) return;
+    const dur = durationMinutes(t.startTime, t.endTime);
+    bookedMins += dur * (t.days || []).length;
+  });
+  return ((bookedMins / TOTAL_MINS) * 100).toFixed(1);
+}
+
 function tripTooltip(trip) {
   const mins = durationMinutes(trip.startTime, trip.endTime);
   const hours = mins / 60;
@@ -30,7 +40,7 @@ function tripTooltip(trip) {
     ["Tid", `${esc(trip.startTime)}–${esc(trip.endTime)} (${fmtHours(mins)})`],
     ["Kilometer", `${fmtNum(trip.km)} km`],
     ["Inntekt pr. time", fmtKr(trip.revenuePerHour)],
-    ["Inntekt pr. kjoring", fmtKr(revenue)]
+    ["Inntekt pr. kjøring", fmtKr(revenue)]
   ];
   return rows
     .map(
@@ -83,12 +93,12 @@ function renderTrack(carTrips) {
   });
 
   const empty =
-    !blocks ? `<span class="gantt-empty">Ingen kjoringer</span>` : "";
+    !blocks ? `<span class="gantt-empty">Ingen kjøringer</span>` : "";
   return seps + gridlines + blocks + empty;
 }
 
 function renderWeekHeader() {
-  const cells = DAYS.map((name, i) => {
+  const cells = DAYS.map((name) => {
     const hourMarks = ["00", "06", "12", "18"]
       .map(
         (h, idx) =>
@@ -104,6 +114,7 @@ function renderWeekHeader() {
   return `<div class="gantt-row gantt-headrow">
     <div class="car-label"></div>
     <div class="gantt-weekheader">${cells}</div>
+    <div class="util-cell util-head">Utnyttelse</div>
   </div>`;
 }
 
@@ -124,12 +135,14 @@ export function renderGantt(dep) {
   const carRows = cars
     .map((car) => {
       const carTrips = trips.filter((t) => tripCarIds(t).includes(car.id));
+      const util = carUtilization(car, trips);
       return `<div class="gantt-row">
         <div class="car-label">
           <span class="car-regnr">${esc(car.regNr || "—")}</span>
           ${car.model ? `<span class="car-model">${esc(car.model)}</span>` : ""}
         </div>
         <div class="gantt-track">${renderTrack(carTrips)}</div>
+        <div class="util-cell">${util} %</div>
       </div>`;
     })
     .join("");
@@ -143,6 +156,7 @@ export function renderGantt(dep) {
             <span class="car-model">Uassignert</span>
           </div>
           <div class="gantt-track">${renderTrack(unassigned)}</div>
+          <div class="util-cell">–</div>
         </div>`
       : "";
 

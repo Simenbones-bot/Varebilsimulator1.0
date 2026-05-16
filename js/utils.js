@@ -1,14 +1,14 @@
 // Sma hjelpefunksjoner: tid, tall og HTML-escaping.
 
-export const DAYS = ["Man", "Tir", "Ons", "Tor", "Fre", "Lor", "Son"];
+export const DAYS = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
 export const DAYS_LONG = [
   "Mandag",
   "Tirsdag",
   "Onsdag",
   "Torsdag",
   "Fredag",
-  "Lordag",
-  "Sondag"
+  "Lørdag",
+  "Søndag"
 ];
 
 export function esc(value) {

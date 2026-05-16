@@ -26,13 +26,16 @@ export async function loadData(username) {
   return data;
 }
 
-// Sikrer at eldre data far nye felter (carIds, fixedCosts, fuel).
+// Sikrer at eldre data far nye felter (carIds, fixedCosts, fuel, personnel).
 function normalizeDepartment(dep) {
   if (!Array.isArray(dep.cars)) dep.cars = [];
   if (!Array.isArray(dep.trips)) dep.trips = [];
   if (!Array.isArray(dep.fixedCosts)) dep.fixedCosts = [];
   if (!dep.fuel || typeof dep.fuel !== "object") {
     dep.fuel = { dieselPrice: 0, electricityPrice: 0 };
+  }
+  if (!dep.personnel || typeof dep.personnel !== "object") {
+    dep.personnel = { driverRate: 250, socialRate: 36 };
   }
   dep.trips.forEach((t) => {
     if (!Array.isArray(t.carIds)) {
@@ -68,7 +71,8 @@ export function addDepartment(name) {
     cars: [],
     trips: [],
     fixedCosts: [],
-    fuel: { dieselPrice: 0, electricityPrice: 0 }
+    fuel: { dieselPrice: 0, electricityPrice: 0 },
+    personnel: { driverRate: 250, socialRate: 36 }
   };
   State.data.departments.push(dep);
   State.data.selectedDepartmentId = dep.id;
@@ -140,5 +144,10 @@ export function deleteFixedCost(dep, id) {
 
 export function setFuel(dep, fuel) {
   dep.fuel = { ...(dep.fuel || {}), ...fuel };
+  save();
+}
+
+export function setPersonnel(dep, personnel) {
+  dep.personnel = { ...(dep.personnel || {}), ...personnel };
   save();
 }

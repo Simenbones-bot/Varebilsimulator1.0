@@ -1,4 +1,4 @@
-// Hovedlogikk: innlogging, navigasjon og UI for avdelinger, biler og kjoringer.
+// Hovedlogikk: innlogging, navigasjon og UI for avdelinger, biler og kjøringer.
 
 import { Store } from "./store.js";
 import {
@@ -26,7 +26,8 @@ import {
   addFixedCost,
   updateFixedCost,
   deleteFixedCost,
-  setFuel
+  setFuel,
+  setPersonnel
 } from "./state.js";
 import { renderGantt } from "./gantt.js";
 import {
@@ -40,7 +41,7 @@ import {
 const app = document.getElementById("app");
 const tooltip = document.getElementById("tooltip");
 
-let view = "kjoringer";
+let view = "kjøringer";
 
 // ---- Oppstart --------------------------------------------------------------
 (async function init() {
@@ -66,7 +67,7 @@ function renderLogin(error = "") {
     <div class="login-wrap">
       <form class="card login-card" id="login-form">
         <h1>Varebilsimulator</h1>
-        <p class="muted">Logg inn for a planlegge avdelinger og kjoringer.</p>
+        <p class="muted">Logg inn for å planlegge avdelinger og kjøringer.</p>
         ${error ? `<div class="alert">${esc(error)}</div>` : ""}
         <label>Brukernavn
           <input name="username" autocomplete="username" required autofocus />
@@ -95,7 +96,7 @@ function renderLogin(error = "") {
         );
         State.session = session;
         await loadData(session.username);
-        view = "kjoringer";
+        view = "kjøringer";
         renderApp();
       } catch (err) {
         renderLogin(err.message || "Innlogging feilet");
@@ -112,10 +113,11 @@ function renderApp() {
       : `<span class="badge warn">Lokal lagring</span>`;
 
   const tabs = [
-    ["kjoringer", "Kjoringer"],
+    ["kjøringer", "Kjøringer"],
     ["biler", "Biler"],
     ["faste", "Faste kostnader"],
-    ["drivstoff", "Drivstoff"]
+    ["drivstoff", "Drivstoff"],
+    ["personal", "Personal"]
   ];
   if (isAdmin) tabs.push(["brukere", "Brukere"]);
 
@@ -188,6 +190,7 @@ function renderContent() {
   if (view === "biler") renderCars(content, dep);
   else if (view === "faste") renderFixedCosts(content, dep);
   else if (view === "drivstoff") renderFuel(content, dep);
+  else if (view === "personal") renderPersonnel(content, dep);
   else renderKjoringer(content, dep);
 }
 
@@ -261,18 +264,18 @@ function carCard(c) {
   </div>`;
 }
 
-// ---- Kjoringer (Gantt) -----------------------------------------------------
+// ---- Kjøringer (Gantt) -----------------------------------------------------
 function renderKjoringer(el, dep) {
   const trips = dep.trips || [];
   el.innerHTML = `
     <div class="section-head">
       <h2>Ukesplan – ${esc(dep.name)}</h2>
-      <button class="btn primary" data-action="add-trip">+ Ny kjoring</button>
+      <button class="btn primary" data-action="add-trip">+ Ny kjøring</button>
     </div>
     ${renderSummary(dep)}
     ${renderGantt(dep)}
     <div class="section-head sub">
-      <h3>Kjoringer (${trips.length})</h3>
+      <h3>Kjøringer (${trips.length})</h3>
     </div>
     ${
       trips.length
@@ -283,7 +286,7 @@ function renderKjoringer(el, dep) {
             </tr></thead>
             <tbody>${trips.map((t) => tripRow(t, dep)).join("")}</tbody>
           </table>`
-        : `<div class="card empty"><p>Ingen kjoringer planlagt.</p></div>`
+        : `<div class="card empty"><p>Ingen kjøringer planlagt.</p></div>`
     }`;
 }
 
@@ -323,6 +326,8 @@ function tripRow(t, dep) {
 function renderSummary(dep) {
   const cars = dep.cars || [];
   const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
+  const p = dep.personnel || { driverRate: 250, socialRate: 36 };
+  const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
   const carCost = cars.reduce((s, c) => s + carMonthly(c), 0);
   const fixedCost = (dep.fixedCosts || []).reduce(
     (s, f) => s + num(f.amount),
@@ -331,6 +336,7 @@ function renderSummary(dep) {
   let weekKm = 0;
   let weekRevenue = 0;
   let fuelWeek = 0;
+  let weekDriverHours = 0;
   (dep.trips || []).forEach((t) => {
     const occ = (t.days || []).length;
     const hours = durationMinutes(t.startTime, t.endTime) / 60;
@@ -338,8 +344,10 @@ function renderSummary(dep) {
       .map((id) => cars.find((c) => c.id === id))
       .filter(Boolean);
     const m = Math.max(assigned.length, 1);
+    const staffMult = t.staffing === "dobbel" ? 2 : 1;
     weekKm += num(t.km) * occ * m;
     weekRevenue += hours * num(t.revenuePerHour) * occ * m;
+    weekDriverHours += hours * occ * m * staffMult;
     assigned.forEach((c) => {
       const price =
         c.fuelType === "el"
@@ -349,27 +357,32 @@ function renderSummary(dep) {
     });
   });
   const fuelMonth = fuelWeek * 4.33;
+  const personnelMonth = weekDriverHours * effectiveRate * 4.33;
   const monthRevenue = weekRevenue * 4.33;
-  const result = monthRevenue - carCost - fixedCost - fuelMonth;
+  const result = monthRevenue - carCost - fixedCost - fuelMonth - personnelMonth;
+  const resultClass = result >= 0 ? "stat-pos" : "stat-neg";
   const cards = [
     ["Biler", `${cars.length}`],
     ["Bilkostnad", `${fmtKr(carCost)} /mnd`],
     ["Faste kostnader", `${fmtKr(fixedCost)} /mnd`],
     ["Drivstoff", `${fmtKr(fuelMonth)} /mnd`],
+    ["Personal", `${fmtKr(personnelMonth)} /mnd`],
     ["Km pr. uke", `${fmtNum(weekKm)} km`],
     ["Inntekt pr. uke", fmtKr(weekRevenue)],
     ["Inntekt pr. virkedag", fmtKr(weekRevenue / 5)],
-    ["Inntekt pr. mnd", fmtKr(monthRevenue)],
-    [
-      "Resultat pr. mnd",
-      `<span class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</span>`
-    ]
+    ["Inntekt pr. mnd", fmtKr(monthRevenue)]
   ];
-  return `<div class="summary">${cards
-    .map(
-      ([a, b]) => `<div class="stat"><span>${a}</span><strong>${b}</strong></div>`
-    )
-    .join("")}</div>`;
+  return `<div class="summary">
+    ${cards
+      .map(
+        ([a, b]) => `<div class="stat"><span>${a}</span><strong>${b}</strong></div>`
+      )
+      .join("")}
+    <div class="stat ${resultClass}">
+      <span>Resultat pr. mnd</span>
+      <strong>${fmtKr(result)}</strong>
+    </div>
+  </div>`;
 }
 
 // ---- Faste kostnader -------------------------------------------------------
@@ -456,6 +469,26 @@ function renderFuel(el, dep) {
     }`;
 }
 
+// ---- Personal --------------------------------------------------------------
+function renderPersonnel(el, dep) {
+  const p = dep.personnel || { driverRate: 250, socialRate: 36 };
+  const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
+  el.innerHTML = `
+    <div class="section-head">
+      <h2>Personal – ${esc(dep.name)}</h2>
+      <button class="btn primary" data-action="edit-personnel">Rediger</button>
+    </div>
+    <div class="summary">
+      <div class="stat"><span>Sjåfør pr. time</span><strong>${fmtKr(p.driverRate)}</strong></div>
+      <div class="stat"><span>Sosiale kostnader</span><strong>${num(p.socialRate)} %</strong></div>
+      <div class="stat"><span>Effektiv timesats</span><strong>${fmtKr(effectiveRate)}</strong></div>
+    </div>
+    <div class="card" style="margin-top:1rem;font-size:.9rem;color:var(--muted)">
+      Effektiv timesats = sjåfør × (1 + sosiale kostnader %).<br>
+      Personalkostnad pr. måned beregnes automatisk fra alle kjøringer og vises i oppsummeringen.
+    </div>`;
+}
+
 // ---- Brukere (admin) -------------------------------------------------------
 async function renderUsers(el) {
   el.innerHTML = `<div class="card empty">Laster brukere …</div>`;
@@ -526,11 +559,11 @@ app.addEventListener("click", async (e) => {
     ]);
     if (res) {
       addDepartment(res.name);
-      view = "kjoringer";
+      view = "kjøringer";
       renderApp();
     }
   } else if (action === "del-dep" && dep) {
-    if (confirm(`Slette avdelingen "${dep.name}" med alle biler og kjoringer?`)) {
+    if (confirm(`Slette avdelingen "${dep.name}" med alle biler og kjøringer?`)) {
       deleteDepartment(dep.id);
       renderApp();
     }
@@ -566,7 +599,7 @@ app.addEventListener("click", async (e) => {
       renderContent();
     }
   } else if (action === "del-trip" && dep) {
-    if (confirm("Slette denne kjoringen?")) {
+    if (confirm("Slette denne kjøringen?")) {
       deleteTrip(dep, t.dataset.id);
       renderContent();
     }
@@ -592,6 +625,12 @@ app.addEventListener("click", async (e) => {
     const res = await fuelModal(dep.fuel);
     if (res) {
       setFuel(dep, res);
+      renderContent();
+    }
+  } else if (action === "edit-personnel" && dep) {
+    const res = await personnelModal(dep.personnel);
+    if (res) {
+      setPersonnel(dep, res);
       renderContent();
     }
   } else if (action === "add-user") {
@@ -620,7 +659,7 @@ app.addEventListener("click", async (e) => {
   }
 });
 
-// Rediger kjoring ved klikk i Gantt
+// Rediger kjøring ved klikk i Gantt
 app.addEventListener("click", async (e) => {
   const block = e.target.closest(".trip-block");
   if (!block) return;
@@ -753,6 +792,15 @@ function fieldHtml(f) {
         )
         .join("")}</div></div>`;
   }
+  if (f.type === "time") {
+    return `<label>${esc(f.label)}
+      <span class="input-wrap"><input type="text" name="${f.name}"
+        value="${esc(v)}" ${f.required ? "required" : ""}
+        placeholder="HH:MM" maxlength="5" inputmode="numeric"
+        pattern="([01][0-9]|2[0-3]):[0-5][0-9]"
+        title="Militærtid, f.eks. 08:30 eller 23:45"/></span>
+    </label>`;
+  }
   const suffix = f.suffix ? `<span class="suffix">${esc(f.suffix)}</span>` : "";
   return `<label>${esc(f.label)}
     <span class="input-wrap"><input type="${f.type}" name="${f.name}"
@@ -818,7 +866,7 @@ function tripModal(trip, dep) {
       value: c.id,
       label: c.regNr + (c.model ? " – " + c.model : "")
     }));
-  return modal(trip ? "Rediger kjoring" : "Ny kjoring", [
+  return modal(trip ? "Rediger kjøring" : "Ny kjøring", [
     { name: "customer", label: "Kundenavn", type: "text", required: true, value: trip?.customer },
     {
       name: "type",
@@ -853,6 +901,14 @@ function fixedCostModal(item) {
   return modal(item ? "Rediger kostnad" : "Ny fast kostnad", [
     { name: "name", label: "Navn (f.eks. husleie)", type: "text", required: true, value: item?.name },
     { name: "amount", label: "Belop (kr/mnd)", type: "number", value: item?.amount }
+  ]);
+}
+
+function personnelModal(personnel) {
+  const p = personnel || { driverRate: 250, socialRate: 36 };
+  return modal("Personalkostnader", [
+    { name: "driverRate", label: "Sjåfør pr. time (kr/t)", type: "number", value: p.driverRate },
+    { name: "socialRate", label: "Sosiale kostnader (%)", type: "number", value: p.socialRate }
   ]);
 }
 
