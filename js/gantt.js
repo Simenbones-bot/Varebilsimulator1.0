@@ -1,7 +1,7 @@
-// Ukesoversikt (Gantt) for kjoringer: Man-Son med 24-timers tidslinje.
+// Ukesoversikt (Gantt): én rad per bil, X-akse Man 00:00 – Son 23:59.
 
 import {
-  DAYS_LONG,
+  DAYS,
   esc,
   toMinutes,
   durationMinutes,
@@ -10,6 +10,7 @@ import {
   fmtNum
 } from "./utils.js";
 
+const TOTAL_MINS = 10080; // 7 × 1440
 const TYPE_LABEL = { fast_rute: "Fast rute", annet: "Annet" };
 const STAFF_LABEL = { enkelt: "Enkelt", dobbel: "Dobbel" };
 
@@ -22,14 +23,6 @@ function tripTooltip(trip) {
     ["Type", TYPE_LABEL[trip.type] || "Annet"],
     ["Bemanning", STAFF_LABEL[trip.staffing] || "Enkelt"],
     ["Tid", `${esc(trip.startTime)}–${esc(trip.endTime)} (${fmtHours(mins)})`],
-    [
-      "Faste dager",
-      (trip.days || [])
-        .slice()
-        .sort((a, b) => a - b)
-        .map((d) => DAYS_LONG[d])
-        .join(", ") || "–"
-    ],
     ["Kilometer", `${fmtNum(trip.km)} km`],
     ["Inntekt pr. time", fmtKr(trip.revenuePerHour)],
     ["Inntekt pr. kjoring", fmtKr(revenue)]
@@ -42,58 +35,115 @@ function tripTooltip(trip) {
     .join("");
 }
 
-function hourAxis() {
-  let cells = "";
-  for (let h = 0; h < 24; h++) {
-    cells += `<div class="gantt-hour">${String(h).padStart(2, "0")}</div>`;
+function renderTrack(carTrips) {
+  // Dag-separatorer ved 1/7, 2/7 … 6/7
+  let seps = "";
+  for (let i = 1; i < 7; i++) {
+    seps += `<div class="gantt-day-sep" style="left:${(
+      (i / 7) *
+      100
+    ).toFixed(4)}%"></div>`;
   }
-  return `<div class="gantt-hours">${cells}</div>`;
-}
 
-export function renderGantt(dep) {
-  const trips = dep.trips || [];
-  let rows = "";
+  // Timegitterlinjer (lette) inni hver dag – annenhver 6. time
+  let gridlines = "";
+  for (let d = 0; d < 7; d++) {
+    for (const h of [6, 12, 18]) {
+      const pos = (((d * 1440 + h * 60) / TOTAL_MINS) * 100).toFixed(4);
+      gridlines += `<div class="gantt-hour-line" style="left:${pos}%"></div>`;
+    }
+  }
 
-  for (let day = 0; day < 7; day++) {
-    const dayTrips = trips.filter((t) => (t.days || []).includes(day));
-    let blocks = "";
-    dayTrips.forEach((trip) => {
-      const s = toMinutes(trip.startTime);
-      if (s === null) return;
-      const dur = durationMinutes(trip.startTime, trip.endTime) || 30;
-      const left = (s / 1440) * 100;
-      const width = Math.min((dur / 1440) * 100, 100 - left);
+  let blocks = "";
+  carTrips.forEach((trip) => {
+    const s = toMinutes(trip.startTime);
+    if (s === null) return;
+    const dur = durationMinutes(trip.startTime, trip.endTime) || 30;
+    const tipAttr = esc(tripTooltip(trip));
+
+    (trip.days || []).forEach((dayIndex) => {
+      const left = (((dayIndex * 1440 + s) / TOTAL_MINS) * 100).toFixed(4);
+      const rawWidth = (dur / TOTAL_MINS) * 100;
+      const width = Math.min(rawWidth, 100 - parseFloat(left)).toFixed(4);
       blocks += `<div class="trip-block type-${esc(trip.type || "annet")}"
         style="left:${left}%;width:${width}%"
-        data-tip="${esc(tripTooltip(trip))}"
+        data-tip="${tipAttr}"
         data-trip="${esc(trip.id)}" title="">
         <span class="trip-name">${esc(trip.customer || "(uten navn)")}</span>
         <span class="trip-badge">${
-          STAFF_LABEL[trip.staffing] === "Dobbel" ? "2x" : "1x"
+          trip.staffing === "dobbel" ? "2x" : "1x"
         }</span>
       </div>`;
     });
+  });
 
-    let gridlines = "";
-    for (let h = 1; h < 24; h++) {
-      gridlines += `<div class="grid-line" style="left:${
-        (h / 24) * 100
-      }%"></div>`;
-    }
+  const empty =
+    !blocks ? `<span class="gantt-empty">Ingen kjoringer</span>` : "";
+  return seps + gridlines + blocks + empty;
+}
 
-    rows += `<div class="gantt-row">
-      <div class="gantt-daycol">${DAYS_LONG[day]}</div>
-      <div class="gantt-track">${gridlines}${
-      blocks || '<span class="gantt-empty">Ingen kjoringer</span>'
-    }</div>
+function renderWeekHeader() {
+  const cells = DAYS.map((name, i) => {
+    const hourMarks = ["00", "06", "12", "18"]
+      .map(
+        (h, idx) =>
+          `<span class="hour-mark" style="left:${idx * 25}%">${h}</span>`
+      )
+      .join("");
+    return `<div class="gantt-daycell">
+      <span class="daycell-name">${name}</span>
+      <div class="daycell-hours">${hourMarks}</div>
+    </div>`;
+  }).join("");
+
+  return `<div class="gantt-row gantt-headrow">
+    <div class="car-label"></div>
+    <div class="gantt-weekheader">${cells}</div>
+  </div>`;
+}
+
+export function renderGantt(dep) {
+  const cars = (dep.cars || [])
+    .slice()
+    .sort((a, b) => (a.regNr || "").localeCompare(b.regNr || ""));
+  const trips = dep.trips || [];
+
+  if (cars.length === 0) {
+    return `<div class="gantt">
+      <div class="gantt-empty-state">
+        Ingen biler registrert — legg til biler under «Biler»-fanen for å se Gantt-oversikten.
+      </div>
     </div>`;
   }
 
+  const carRows = cars
+    .map((car) => {
+      const carTrips = trips.filter((t) => t.carId === car.id);
+      return `<div class="gantt-row">
+        <div class="car-label">
+          <span class="car-regnr">${esc(car.regNr || "—")}</span>
+          ${car.model ? `<span class="car-model">${esc(car.model)}</span>` : ""}
+        </div>
+        <div class="gantt-track">${renderTrack(carTrips)}</div>
+      </div>`;
+    })
+    .join("");
+
+  const unassigned = trips.filter((t) => !t.carId);
+  const unassignedRow =
+    unassigned.length > 0
+      ? `<div class="gantt-row gantt-unassigned">
+          <div class="car-label">
+            <span class="car-regnr">–</span>
+            <span class="car-model">Uassignert</span>
+          </div>
+          <div class="gantt-track">${renderTrack(unassigned)}</div>
+        </div>`
+      : "";
+
   return `<div class="gantt">
-    <div class="gantt-row gantt-headrow">
-      <div class="gantt-daycol"></div>
-      ${hourAxis()}
-    </div>
-    ${rows}
+    ${renderWeekHeader()}
+    ${carRows}
+    ${unassignedRow}
   </div>`;
 }

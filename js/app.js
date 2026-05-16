@@ -266,22 +266,25 @@ function renderKjoringer(el, dep) {
       trips.length
         ? `<table class="list">
             <thead><tr>
-              <th>Kunde</th><th>Type</th><th>Bemanning</th>
+              <th>Kunde</th><th>Type</th><th>Bemanning</th><th>Bil</th>
               <th>Tid</th><th>Dager</th><th>Km</th><th>Kr/t</th><th></th>
             </tr></thead>
-            <tbody>${trips.map(tripRow).join("")}</tbody>
+            <tbody>${trips.map((t) => tripRow(t, dep)).join("")}</tbody>
           </table>`
         : `<div class="card empty"><p>Ingen kjoringer planlagt.</p></div>`
     }`;
 }
 
-function tripRow(t) {
+function tripRow(t, dep) {
+  const assignedCar = (dep?.cars || []).find((c) => c.id === t.carId);
+  const carLabel = assignedCar ? esc(assignedCar.regNr) : "–";
   return `<tr>
     <td>${esc(t.customer || "(uten navn)")}</td>
     <td><span class="pill type-${esc(t.type || "annet")}">${
     t.type === "fast_rute" ? "Fast rute" : "Annet"
   }</span></td>
     <td>${t.staffing === "dobbel" ? "Dobbel" : "Enkelt"}</td>
+    <td>${carLabel}</td>
     <td>${esc(t.startTime)}–${esc(t.endTime)}</td>
     <td>${(t.days || [])
       .slice()
@@ -401,6 +404,7 @@ app.addEventListener("click", async (e) => {
     ]);
     if (res) {
       addDepartment(res.name);
+      view = "kjoringer";
       renderApp();
     }
   } else if (action === "del-dep" && dep) {
@@ -427,14 +431,14 @@ app.addEventListener("click", async (e) => {
       renderContent();
     }
   } else if (action === "add-trip" && dep) {
-    const res = await tripModal();
+    const res = await tripModal(null, dep);
     if (res) {
       addTrip(dep, res);
       renderContent();
     }
   } else if (action === "edit-trip" && dep) {
     const trip = dep.trips.find((x) => x.id === t.dataset.id);
-    const res = await tripModal(trip);
+    const res = await tripModal(trip, dep);
     if (res) {
       updateTrip(dep, trip.id, res);
       renderContent();
@@ -477,7 +481,7 @@ app.addEventListener("click", async (e) => {
   const dep = selectedDepartment();
   const trip = dep?.trips.find((x) => x.id === block.dataset.trip);
   if (!trip) return;
-  const res = await tripModal(trip);
+  const res = await tripModal(trip, dep);
   if (res) {
     updateTrip(dep, trip.id, res);
     renderContent();
@@ -626,7 +630,17 @@ function carModal(car) {
   });
 }
 
-function tripModal(trip) {
+function tripModal(trip, dep) {
+  const carOptions = [
+    { value: "", label: "Ingen bil" },
+    ...(dep?.cars || [])
+      .slice()
+      .sort((a, b) => (a.regNr || "").localeCompare(b.regNr || ""))
+      .map((c) => ({
+        value: c.id,
+        label: c.regNr + (c.model ? " – " + c.model : "")
+      }))
+  ];
   return modal(trip ? "Rediger kjoring" : "Ny kjoring", [
     { name: "customer", label: "Kundenavn", type: "text", required: true, value: trip?.customer },
     {
@@ -649,6 +663,7 @@ function tripModal(trip) {
         { value: "dobbel", label: "Dobbel" }
       ]
     },
+    { name: "carId", label: "Bil", type: "select", value: trip?.carId || "", options: carOptions },
     { name: "startTime", label: "Starttidspunkt", type: "time", required: true, value: trip?.startTime || "08:00" },
     { name: "endTime", label: "Sluttidspunkt", type: "time", required: true, value: trip?.endTime || "16:00" },
     { name: "days", label: "Faste dager", type: "days", value: trip?.days || [] },
