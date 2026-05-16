@@ -7,7 +7,9 @@ import {
   durationMinutes,
   fmtHours,
   fmtKr,
-  fmtNum
+  fmtNum,
+  carMonthly,
+  MONTH_FACTOR
 } from "./utils.js";
 
 const TOTAL_MINS = 10080; // 7 × 1440
@@ -17,6 +19,38 @@ const STAFF_LABEL = { enkelt: "Enkelt", dobbel: "Dobbel" };
 function tripCarIds(t) {
   if (Array.isArray(t.carIds)) return t.carIds;
   return t.carId ? [t.carId] : [];
+}
+
+function carCostPerHour(car, trips, dep) {
+  const p = dep.personnel || { driverRate: 250, socialRate: 36 };
+  const eff = (Number(p.driverRate) || 0) * (1 + (Number(p.socialRate) || 0) / 100);
+  const fuel = dep.fuel || {};
+  let hoursWeek = 0;
+  let driverWeek = 0;
+  let fuelWeek = 0;
+  let revenueWeek = 0;
+  trips.forEach((t) => {
+    if (!tripCarIds(t).includes(car.id)) return;
+    const occ = (t.days || []).length;
+    const h = durationMinutes(t.startTime, t.endTime) / 60;
+    const staffMult = t.staffing === "dobbel" ? 2 : 1;
+    hoursWeek += h * occ;
+    driverWeek += h * occ * staffMult * eff;
+    revenueWeek += h * occ * (Number(t.revenuePerHour) || 0);
+    const price =
+      car.fuelType === "el"
+        ? Number(fuel.electricityPrice) || 0
+        : Number(fuel.dieselPrice) || 0;
+    fuelWeek +=
+      (Number(t.km) || 0) * occ * ((Number(car.consumption) || 0) / 100) * price;
+  });
+  if (hoursWeek === 0) return null;
+  const monthHours = hoursWeek * MONTH_FACTOR;
+  const opCostMonth =
+    driverWeek * MONTH_FACTOR + carMonthly(car) + fuelWeek * MONTH_FACTOR;
+  const costPerHour = opCostMonth / monthHours;
+  const incomePerHour = revenueWeek / hoursWeek;
+  return { costPerHour, loss: costPerHour > incomePerHour };
 }
 
 function carUtilization(car, trips) {
@@ -80,8 +114,9 @@ function renderTrack(carTrips) {
       const left = (((dayIndex * 1440 + s) / TOTAL_MINS) * 100).toFixed(4);
       const rawWidth = (dur / TOTAL_MINS) * 100;
       const width = Math.min(rawWidth, 100 - parseFloat(left)).toFixed(4);
+      const bg = trip.color ? `background:${esc(trip.color)};` : "";
       blocks += `<div class="trip-block type-${esc(trip.type || "annet")}"
-        style="left:${left}%;width:${width}%"
+        style="left:${left}%;width:${width}%;${bg}"
         data-tip="${tipAttr}"
         data-trip="${esc(trip.id)}" title="">
         <span class="trip-name">${esc(trip.customer || "(uten navn)")}</span>
@@ -115,6 +150,7 @@ function renderWeekHeader() {
     <div class="car-label"></div>
     <div class="gantt-weekheader">${cells}</div>
     <div class="util-cell util-head">Utnyttelse</div>
+    <div class="cost-cell cost-head">Drift/time</div>
   </div>`;
 }
 
@@ -136,6 +172,7 @@ export function renderGantt(dep) {
     .map((car) => {
       const carTrips = trips.filter((t) => tripCarIds(t).includes(car.id));
       const util = carUtilization(car, trips);
+      const oc = carCostPerHour(car, trips, dep);
       return `<div class="gantt-row">
         <div class="car-label">
           <span class="car-regnr">${esc(car.regNr || "—")}</span>
@@ -143,6 +180,9 @@ export function renderGantt(dep) {
         </div>
         <div class="gantt-track">${renderTrack(carTrips)}</div>
         <div class="util-cell">${util} %</div>
+        <div class="cost-cell ${oc && oc.loss ? "neg" : ""}">${
+        oc ? fmtKr(oc.costPerHour) : "–"
+      }</div>
       </div>`;
     })
     .join("");
@@ -157,6 +197,7 @@ export function renderGantt(dep) {
           </div>
           <div class="gantt-track">${renderTrack(unassigned)}</div>
           <div class="util-cell">–</div>
+          <div class="cost-cell">–</div>
         </div>`
       : "";
 

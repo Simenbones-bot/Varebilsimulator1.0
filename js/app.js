@@ -35,11 +35,18 @@ import {
   esc,
   durationMinutes,
   fmtKr,
-  fmtNum
+  fmtNum,
+  carMonthly,
+  MONTH_FACTOR
 } from "./utils.js";
 
 const app = document.getElementById("app");
 const tooltip = document.getElementById("tooltip");
+
+const TRIP_COLORS = [
+  "#4f46e5", "#7c3aed", "#db2777", "#dc2626", "#ea580c", "#d97706",
+  "#0891b2", "#0d9488", "#16a34a", "#9333ea", "#be123c", "#2563eb"
+];
 
 let view = "kjøringer";
 
@@ -195,17 +202,6 @@ function renderContent() {
 }
 
 // ---- Biler -----------------------------------------------------------------
-function carMonthly(c) {
-  const k = c.costs || {};
-  return (
-    num(k.leasing) +
-    num(k.insurance) +
-    num(k.parking) +
-    num(k.service) / 12 +
-    num(k.tires) / 12
-  );
-}
-
 function renderCars(el, dep) {
   const cars = dep.cars || [];
   el.innerHTML = `
@@ -356,11 +352,10 @@ function renderSummary(dep) {
       fuelWeek += num(t.km) * occ * (num(c.consumption) / 100) * price;
     });
   });
-  const fuelMonth = fuelWeek * 4.33;
-  const personnelMonth = weekDriverHours * effectiveRate * 4.33;
-  const monthRevenue = weekRevenue * 4.33;
+  const fuelMonth = fuelWeek * MONTH_FACTOR;
+  const personnelMonth = weekDriverHours * effectiveRate * MONTH_FACTOR;
+  const monthRevenue = weekRevenue * MONTH_FACTOR;
   const result = monthRevenue - carCost - fixedCost - fuelMonth - personnelMonth;
-  const resultClass = result >= 0 ? "stat-pos" : "stat-neg";
   const cards = [
     ["Biler", `${cars.length}`],
     ["Bilkostnad", `${fmtKr(carCost)} /mnd`],
@@ -378,9 +373,9 @@ function renderSummary(dep) {
         ([a, b]) => `<div class="stat"><span>${a}</span><strong>${b}</strong></div>`
       )
       .join("")}
-    <div class="stat ${resultClass}">
+    <div class="stat">
       <span>Resultat pr. mnd</span>
-      <strong>${fmtKr(result)}</strong>
+      <strong class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</strong>
     </div>
   </div>`;
 }
@@ -792,6 +787,11 @@ function fieldHtml(f) {
         )
         .join("")}</div></div>`;
   }
+  if (f.type === "color") {
+    return `<label>${esc(f.label)}
+      <input type="color" name="${f.name}" value="${esc(v || "#4f46e5")}"
+        style="height:38px;padding:2px;width:100%"/></label>`;
+  }
   if (f.type === "time") {
     return `<label>${esc(f.label)}
       <span class="input-wrap"><input type="text" name="${f.name}"
@@ -887,6 +887,14 @@ function tripModal(trip, dep) {
         { value: "enkelt", label: "Enkelt" },
         { value: "dobbel", label: "Dobbel" }
       ]
+    },
+    {
+      name: "color",
+      label: "Farge",
+      type: "color",
+      value:
+        trip?.color ||
+        TRIP_COLORS[(dep?.trips?.length || 0) % TRIP_COLORS.length]
     },
     { name: "carIds", label: "Biler", type: "multi", value: tripCarIds(trip || {}), options: carOptions },
     { name: "startTime", label: "Starttidspunkt", type: "time", required: true, value: trip?.startTime || "08:00" },

@@ -241,8 +241,6 @@ code {
 .stat strong { font-size: 1.1rem; }
 .pos { color: var(--ok); }
 .neg { color: var(--danger); }
-.stat-pos { background: #e7f6ec; border-color: #16a34a; }
-.stat-neg { background: #fdecec; border-color: #dc2626; }
 
 /* Gantt -------------------------------------------------------------------- */
 .gantt {
@@ -534,9 +532,30 @@ code {
   background: #f4f5fa;
   padding: .4rem;
 }
+.cost-cell {
+  width: 92px;
+  flex: none;
+  border-left: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 .4rem;
+}
+.cost-cell.neg { color: var(--danger); }
+.cost-head {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  background: #f4f5fa;
+  padding: .4rem;
+}
 
 @media (max-width: 640px) {
   .content { padding: 1rem; }
   .gantt { overflow-x: auto; }
-  .gantt-row { min-width: 980px; }
+  .gantt-row { min-width: 1080px; }
 }

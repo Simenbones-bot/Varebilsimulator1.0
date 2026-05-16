@@ -11,6 +11,22 @@ export const DAYS_LONG = [
   "Søndag"
 ];
 
+// Uke→maaned via norske virkedager: 253 virkedager/aar / 12 mnd / 5 ukedager.
+export const MONTH_FACTOR = 253 / 12 / 5;
+
+// Estimert maanedlig bilkostnad (aarlige poster fordeles paa 12).
+export function carMonthly(c) {
+  const k = (c && c.costs) || {};
+  const n = (v) => Number(v) || 0;
+  return (
+    n(k.leasing) +
+    n(k.insurance) +
+    n(k.parking) +
+    n(k.service) / 12 +
+    n(k.tires) / 12
+  );
+}
+
 export function esc(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
