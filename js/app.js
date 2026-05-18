@@ -66,6 +66,7 @@ let view = "kjøringer";
 let ganttExpanded = false;
 let tripsCollapsed = false;
 let summaryExpanded = false;
+let selectedCarId = null;
 
 // ---- Oppstart --------------------------------------------------------------
 (async function init() {
@@ -475,20 +476,51 @@ function renderSummary(dep) {
   const statCard = ([a, b, tip]) =>
     `<div class="stat"><span>${a}${tip ? infoIcon(tip) : ""}</span><strong>${b}</strong></div>`;
 
-  // Funnel
-  const lonnTotal  = personnelMonth + lederMonth + koordinatorMonth;
-  const fasteTotal = carCost + fixedCost + fuelMonth;
-  const afterLonn  = monthRevenue - lonnTotal;
-  const afterFaste = afterLonn - fasteTotal;
-  const afterKons  = afterFaste - konsernfellesMonth;
+  // Funnel — totalt eller per valgt bil
+  let fRevMonth    = monthRevenue;
+  let fLonnCut     = personnelMonth + lederMonth + koordinatorMonth;
+  let fLonnLabel   = "Lønn";
+  let fFasteCut    = carCost + fixedCost + fuelMonth;
+  let fFasteLabel  = "Bil + faste + drivstoff";
+  let fKonsCut     = konsernfellesMonth;
+  let fMarginCut   = marginMonth;
+  let fResult      = result;
+
+  const selCar = selectedCarId ? cars.find((c) => c.id === selectedCarId) : null;
+  if (selCar) {
+    const carTrips = (dep.trips || []).filter((t) => tripCarIds(t).includes(selCar.id));
+    let carRevWeek = 0, carDriverHoursWeek = 0, carFuelWeek = 0;
+    carTrips.forEach((t) => {
+      const occ = (t.days || []).length;
+      const hours = durationMinutes(t.startTime, t.endTime) / 60;
+      const staffMult = t.staffing === "dobbel" ? 2 : 1;
+      const price = selCar.fuelType === "el" ? num(fuel.electricityPrice) : num(fuel.dieselPrice);
+      carRevWeek        += hours * num(t.revenuePerHour) * occ;
+      carDriverHoursWeek += hours * occ * staffMult;
+      carFuelWeek        += num(t.km) * occ * (num(selCar.consumption) / 100) * price;
+    });
+    fRevMonth   = carRevWeek * MONTH_FACTOR;
+    fLonnCut    = carDriverHoursWeek * effectiveRate * MONTH_FACTOR;
+    fLonnLabel  = "Lønn (sjåfør)";
+    fFasteCut   = carMonthly(selCar) + carFuelWeek * MONTH_FACTOR;
+    fFasteLabel = "Bil + drivstoff";
+    const carDriftsbase = fLonnCut + fFasteCut;
+    fKonsCut    = carDriftsbase * (num(mkp.konsernfelles) / 100);
+    fMarginCut  = carDriftsbase * (num(mkp.margin) / 100);
+    fResult     = fRevMonth - fLonnCut - fFasteCut - fKonsCut - fMarginCut;
+  }
+
+  const afterLonn  = fRevMonth - fLonnCut;
+  const afterFaste = afterLonn - fFasteCut;
+  const afterKons  = afterFaste - fKonsCut;
   const funnelSteps = [
-    { label: "Inntekt",              value: monthRevenue },
-    { label: "Etter lønn",           value: afterLonn,  cut: lonnTotal,           cutLabel: "Lønn" },
-    { label: "Etter faste kost.",    value: afterFaste, cut: fasteTotal,           cutLabel: "Bil + faste + drivstoff" },
-    { label: "Etter konsernfelles",  value: afterKons,  cut: konsernfellesMonth,   cutLabel: "Konsernfelles" },
-    { label: "Overskudd",            value: result,     cut: marginMonth,          cutLabel: "Påslag" }
+    { label: "Inntekt",              value: fRevMonth },
+    { label: "Etter lønn",           value: afterLonn,  cut: fLonnCut,   cutLabel: fLonnLabel },
+    { label: "Etter faste kost.",    value: afterFaste, cut: fFasteCut,  cutLabel: fFasteLabel },
+    { label: "Etter konsernfelles",  value: afterKons,  cut: fKonsCut,   cutLabel: "Konsernfelles" },
+    { label: "Overskudd",            value: fResult,    cut: fMarginCut, cutLabel: "Påslag" }
   ];
-  const fPct = (v) => Math.max(4, (Math.max(0, v) / (monthRevenue || 1)) * 100).toFixed(1);
+  const fPct = (v) => Math.max(4, (Math.max(0, v) / (fRevMonth || 1)) * 100).toFixed(1);
   const funnelHtml = funnelSteps.map((s, i) => {
     const isLast = i === funnelSteps.length - 1;
     const barCls = isLast
@@ -505,8 +537,16 @@ function renderSummary(dep) {
         </div>
       </div>`;
   }).join("");
+
+  const carTabs = cars.length > 1
+    ? `<div class="funnel-car-tabs">
+        <button class="funnel-car-tab${!selectedCarId ? " active" : ""}" data-action="select-funnel-car" data-car-id="">Alle</button>
+        ${cars.map((c) => `<button class="funnel-car-tab${selectedCarId === c.id ? " active" : ""}" data-action="select-funnel-car" data-car-id="${esc(c.id)}">${esc(c.regNr || "—")}</button>`).join("")}
+      </div>`
+    : "";
+
   const funnelSection = monthRevenue > 0
-    ? `<div class="card funnel-card">${funnelHtml}</div>`
+    ? `<div class="card funnel-card">${carTabs}${funnelHtml}</div>`
     : "";
 
   return `
@@ -840,6 +880,9 @@ app.addEventListener("click", async (e) => {
       deleteTrip(dep, t.dataset.id);
       renderContent();
     }
+  } else if (action === "select-funnel-car") {
+    selectedCarId = t.dataset.carId || null;
+    renderContent();
   } else if (action === "toggle-summary") {
     summaryExpanded = !summaryExpanded;
     renderContent();
