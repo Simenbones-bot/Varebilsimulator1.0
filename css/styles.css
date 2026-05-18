@@ -553,9 +553,29 @@ code {
   background: #f4f5fa;
   padding: .4rem;
 }
+.income-cell {
+  width: 92px;
+  flex: none;
+  border-left: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 .4rem;
+}
+.income-head {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  background: #f4f5fa;
+  padding: .4rem;
+}
 
 @media (max-width: 640px) {
   .content { padding: 1rem; }
   .gantt { overflow-x: auto; }
-  .gantt-row { min-width: 1080px; }
+  .gantt-row { min-width: 1160px; }
 }

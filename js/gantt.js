@@ -50,7 +50,7 @@ function carCostPerHour(car, trips, dep) {
     driverWeek * MONTH_FACTOR + carMonthly(car) + fuelWeek * MONTH_FACTOR;
   const costPerHour = opCostMonth / monthHours;
   const incomePerHour = revenueWeek / hoursWeek;
-  return { costPerHour, loss: costPerHour > incomePerHour };
+  return { costPerHour, incomePerHour, loss: costPerHour > incomePerHour };
 }
 
 function carUtilization(car, trips) {
@@ -151,6 +151,7 @@ function renderWeekHeader() {
     <div class="gantt-weekheader">${cells}</div>
     <div class="util-cell util-head">Utnyttelse</div>
     <div class="cost-cell cost-head">Drift/time</div>
+    <div class="income-cell income-head">Inntekt/time</div>
   </div>`;
 }
 
@@ -183,6 +184,7 @@ export function renderGantt(dep) {
         <div class="cost-cell ${oc && oc.loss ? "neg" : ""}">${
         oc ? fmtKr(oc.costPerHour) : "–"
       }</div>
+        <div class="income-cell">${oc ? fmtKr(oc.incomePerHour) : "–"}</div>
       </div>`;
     })
     .join("");
@@ -198,6 +200,7 @@ export function renderGantt(dep) {
           <div class="gantt-track">${renderTrack(unassigned)}</div>
           <div class="util-cell">–</div>
           <div class="cost-cell">–</div>
+          <div class="income-cell">–</div>
         </div>`
       : "";
 

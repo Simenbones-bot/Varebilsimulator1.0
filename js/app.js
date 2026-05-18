@@ -48,6 +48,14 @@ const TRIP_COLORS = [
   "#0891b2", "#0d9488", "#16a34a", "#9333ea", "#be123c", "#2563eb"
 ];
 
+const VEHICLE_TYPES = [
+  { value: "",               label: "– Velg kategori –" },
+  { value: "skapbil_19",    label: "Skapbil 19m³" },
+  { value: "stor_15",       label: "Stor varebil 15m³" },
+  { value: "mellomstor_11", label: "Mellomstor varebil 11m³" },
+  { value: "liten_6",       label: "Liten varebil 6m³" }
+];
+
 let view = "kjøringer";
 
 // ---- Oppstart --------------------------------------------------------------
@@ -220,7 +228,9 @@ function carCard(c) {
   const k = c.costs || {};
   const fuelLabel = c.fuelType === "el" ? "Elektrisk" : "Diesel";
   const fuelUnit = c.fuelType === "el" ? "kWh/100km" : "l/100km";
+  const vehicleLabel = VEHICLE_TYPES.find((v) => v.value === c.vehicleType && v.value)?.label;
   const rows = [
+    ...(vehicleLabel ? [["Kategori", esc(vehicleLabel)]] : []),
     ["Leasing", `${fmtKr(k.leasing)} /mnd`],
     ["Forsikring", `${fmtKr(k.insurance)} /mnd`],
     ["Parkering", `${fmtKr(k.parking)} /mnd`],
@@ -278,7 +288,7 @@ function renderKjoringer(el, dep) {
         ? `<table class="list">
             <thead><tr>
               <th>Kunde</th><th>Type</th><th>Bemanning</th><th>Bil</th>
-              <th>Tid</th><th>Dager</th><th>Km</th><th>Kr/t</th><th></th>
+              <th>Tid</th><th>Dager</th><th>Km</th><th>Kr/t</th><th>Kategori</th><th></th>
             </tr></thead>
             <tbody>${trips.map((t) => tripRow(t, dep)).join("")}</tbody>
           </table>`
@@ -293,6 +303,7 @@ function tripRow(t, dep) {
     .filter(Boolean)
     .map((c) => esc(c.regNr));
   const carLabel = regs.length ? regs.join(", ") : "–";
+  const vehicleLabel = VEHICLE_TYPES.find((v) => v.value === t.vehicleType && v.value)?.label || "–";
   return `<tr>
     <td>${esc(t.customer || "(uten navn)")}</td>
     <td><span class="pill type-${esc(t.type || "annet")}">${
@@ -308,6 +319,7 @@ function tripRow(t, dep) {
       .join(", ")}</td>
     <td>${fmtNum(t.km)}</td>
     <td>${fmtNum(t.revenuePerHour)}</td>
+    <td>${esc(vehicleLabel)}</td>
     <td class="row-actions">
       <button class="btn small" data-action="edit-trip" data-id="${esc(
         t.id
@@ -814,6 +826,7 @@ function carModal(car) {
   return modal(car ? "Rediger bil" : "Registrer bil", [
     { name: "regNr", label: "Reg.nr", type: "text", required: true, value: car?.regNr },
     { name: "model", label: "Merke / modell", type: "text", value: car?.model },
+    { name: "vehicleType", label: "Kjøretøykategori", type: "select", value: car?.vehicleType || "", options: VEHICLE_TYPES },
     { name: "description", label: "Beskrivelse", type: "text", value: car?.description },
     {
       name: "fuelType",
@@ -840,6 +853,7 @@ function carModal(car) {
     return {
       regNr: r.regNr,
       model: r.model,
+      vehicleType: r.vehicleType,
       description: r.description,
       fuelType: r.fuelType,
       consumption: r.consumption,
@@ -888,6 +902,7 @@ function tripModal(trip, dep) {
         { value: "dobbel", label: "Dobbel" }
       ]
     },
+    { name: "vehicleType", label: "Kjøretøykategori", type: "select", value: trip?.vehicleType || "", options: VEHICLE_TYPES },
     {
       name: "color",
       label: "Farge",
