@@ -241,15 +241,25 @@ code {
   gap: .75rem;
   margin-bottom: 1.25rem;
 }
+.summary-hero {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .75rem;
+  margin-bottom: .25rem;
+}
 .stat {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: .75rem .9rem;
   box-shadow: var(--shadow);
+  position: relative;
 }
-.stat span { display: block; font-size: .78rem; color: var(--muted); }
+.stat span { display: block; font-size: .78rem; color: var(--muted); padding-right: 1.25rem; }
 .stat strong { font-size: 1.1rem; }
+.stat-hero { padding: 1.1rem 1.25rem; }
+.stat-hero strong { font-size: 1.6rem; display: block; margin-top: .2rem; }
+.stat .info-i { position: absolute; top: .45rem; right: .5rem; margin-left: 0; }
 .pos { color: var(--ok); }
 .neg { color: var(--danger); }
 
@@ -669,4 +679,5 @@ code {
   .content { padding: 1rem; }
   .gantt { overflow-x: auto; }
   .gantt-row { min-width: 1360px; }
+  .summary-hero { grid-template-columns: 1fr; }
 }

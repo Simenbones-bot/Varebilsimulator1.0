@@ -65,6 +65,7 @@ const VEHICLE_TYPES = [
 let view = "kjøringer";
 let ganttExpanded = false;
 let tripsCollapsed = false;
+let summaryExpanded = false;
 
 // ---- Oppstart --------------------------------------------------------------
 (async function init() {
@@ -406,6 +407,8 @@ function renderSummary(dep) {
   const result =
     monthRevenue - carCost - fixedCost - fuelMonth - personnelMonth -
     lederMonth - koordinatorMonth - konsernfellesMonth - marginMonth;
+  const totalCostMonth = carCost + fixedCost + fuelMonth + personnelMonth
+    + lederMonth + koordinatorMonth + konsernfellesMonth + marginMonth;
   const driverFte = weekDriverHours / 37.5;
   const lederFte = (dep.personnel.ledere || []).reduce((s, l) => s + num(l.aarsrverk), 0);
   const koordinatorFte = (dep.personnel.koordinatorer || []).reduce((s, k) => s + num(k.aarsrverk), 0);
@@ -415,7 +418,16 @@ function renderSummary(dep) {
   const marginPct = num(mkp.margin);
   const mf = MONTH_FACTOR.toFixed(2);
   const driftsbaseTekst = "bilkostnad + drivstoff + personal + ledelse + koordinator";
-  const cards = [
+
+  const inntektTip = tipRows([["Formel", `Inntekt pr. uke × ${mf}`]]);
+  const kostnadTip = tipRows([
+    ["Inkluderer", "bilkostnad + faste + drivstoff + personal + ledelse + koordinator + konsernfelles + margin"]
+  ]);
+  const resultTip = tipRows([
+    ["Formel", "inntekt/mnd − bilkostnad − faste − drivstoff − personal − ledelse − koordinator − konsernfelles − margin"]
+  ]);
+
+  const detailCards = [
     ["Biler", `${cars.length}`,
       tipRows([["Teller", "Antall registrerte biler i avdelingen"]])],
     ["Bilkostnad", `${fmtKr(carCost)} /mnd`,
@@ -457,26 +469,36 @@ function renderSummary(dep) {
     ["Inntekt pr. uke", fmtKr(weekRevenue),
       tipRows([["Formel", "Σ (timer × kr/t × dager × antall biler)"]])],
     ["Inntekt pr. virkedag", fmtKr(weekRevenue / 5),
-      tipRows([["Formel", "Inntekt pr. uke / 5"]])],
-    ["Inntekt pr. mnd", fmtKr(monthRevenue),
-      tipRows([["Formel", `Inntekt pr. uke × ${mf}`]])]
+      tipRows([["Formel", "Inntekt pr. uke / 5"]])]
   ];
-  const resultTip = tipRows([
-    ["Formel", "inntekt/mnd − bilkostnad − faste − drivstoff − personal − ledelse − koordinator − konsernfelles − margin"]
-  ]);
-  return `<div class="summary">
-    ${cards
-      .map(
-        ([a, b, tip]) =>
-          `<div class="stat"><span>${a}${tip ? infoIcon(tip) : ""}</span>` +
-          `<strong>${b}</strong></div>`
-      )
-      .join("")}
-    <div class="stat">
-      <span>Resultat pr. mnd${infoIcon(resultTip)}</span>
-      <strong class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</strong>
+
+  const statCard = ([a, b, tip]) =>
+    `<div class="stat"><span>${a}${tip ? infoIcon(tip) : ""}</span><strong>${b}</strong></div>`;
+
+  return `
+    <div class="summary-hero">
+      <div class="stat stat-hero">
+        <span>Inntekt pr. mnd${infoIcon(inntektTip)}</span>
+        <strong>${fmtKr(monthRevenue)}</strong>
+      </div>
+      <div class="stat stat-hero">
+        <span>Kostnader pr. mnd${infoIcon(kostnadTip)}</span>
+        <strong>${fmtKr(totalCostMonth)}</strong>
+      </div>
+      <div class="stat stat-hero">
+        <span>Resultat pr. mnd${infoIcon(resultTip)}</span>
+        <strong class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</strong>
+      </div>
     </div>
-  </div>`;
+    <div class="section-head sub" style="margin-top:.75rem;margin-bottom:.5rem">
+      <h3>Detaljer</h3>
+      <button class="btn small ghost" data-action="toggle-summary">
+        ${summaryExpanded ? "▲ Skjul" : "▼ Vis detaljer"}
+      </button>
+    </div>
+    ${summaryExpanded
+      ? `<div class="summary">${detailCards.map(statCard).join("")}</div>`
+      : ""}`;
 }
 
 // ---- Faste kostnader -------------------------------------------------------
@@ -783,6 +805,9 @@ app.addEventListener("click", async (e) => {
       deleteTrip(dep, t.dataset.id);
       renderContent();
     }
+  } else if (action === "toggle-summary") {
+    summaryExpanded = !summaryExpanded;
+    renderContent();
   } else if (action === "toggle-trips") {
     tripsCollapsed = !tripsCollapsed;
     renderContent();
