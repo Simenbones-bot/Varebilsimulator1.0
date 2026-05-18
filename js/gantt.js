@@ -54,7 +54,10 @@ function carCostPerHour(car, trips, dep) {
     1 + (Number(mkp.konsernfelles) || 0) / 100 + (Number(mkp.margin) || 0) / 100;
   const costPerHour = baseCostPerHour * markupFactor;
   const incomePerHour = revenueWeek / hoursWeek;
-  return { costPerHour, incomePerHour, loss: costPerHour > incomePerHour };
+  const monthlyIncome = revenueWeek * MONTH_FACTOR;
+  const monthlyCost = opCostMonth * markupFactor;
+  const result = monthlyIncome - monthlyCost;
+  return { costPerHour, incomePerHour, loss: costPerHour > incomePerHour, result };
 }
 
 function tripSpecificCostPerHour(trip, car, dep, totalMonthHours) {
@@ -190,6 +193,7 @@ function renderWeekHeader() {
     <div class="util-cell util-head">Utnyttelse</div>
     <div class="cost-cell cost-head">Drift/time</div>
     <div class="income-cell income-head">Inntekt/time</div>
+    <div class="result-cell result-head">Resultat /mnd</div>
   </div>`;
 }
 
@@ -235,6 +239,9 @@ export function renderGantt(dep, expanded = false) {
         oc ? fmtKr(oc.costPerHour) : "–"
       }</div>
         <div class="income-cell">${oc ? fmtKr(oc.incomePerHour) : "–"}</div>
+        <div class="result-cell ${oc ? (oc.result >= 0 ? "pos" : "neg") : ""}">${
+        oc ? fmtKr(oc.result) : "–"
+      }</div>
       </div>`;
     })
     .join("");
@@ -251,6 +258,7 @@ export function renderGantt(dep, expanded = false) {
           <div class="util-cell">–</div>
           <div class="cost-cell">–</div>
           <div class="income-cell">–</div>
+          <div class="result-cell">–</div>
         </div>`
       : "";
 

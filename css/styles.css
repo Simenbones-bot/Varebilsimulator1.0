@@ -515,10 +515,12 @@ code {
 /* Detaljkolonner skjult som standard, synlige ved .gantt--expanded ---------- */
 .gantt .util-cell,
 .gantt .cost-cell,
-.gantt .income-cell { display: none; }
+.gantt .income-cell,
+.gantt .result-cell { display: none; }
 .gantt.gantt--expanded .util-cell,
 .gantt.gantt--expanded .cost-cell,
-.gantt.gantt--expanded .income-cell { display: flex; }
+.gantt.gantt--expanded .income-cell,
+.gantt.gantt--expanded .result-cell { display: flex; }
 
 /* Bilutnyttelse-kolonne ---------------------------------------------------- */
 .util-cell {
@@ -583,8 +585,31 @@ code {
   padding: .4rem;
 }
 
+.result-cell {
+  width: 110px;
+  flex: none;
+  border-left: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 .4rem;
+}
+.result-cell.pos { color: var(--ok); }
+.result-cell.neg { color: var(--danger); }
+.result-head {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  background: #f4f5fa;
+  padding: .4rem;
+}
+
 @media (max-width: 640px) {
   .content { padding: 1rem; }
   .gantt { overflow-x: auto; }
-  .gantt-row { min-width: 1160px; }
+  .gantt-row { min-width: 1280px; }
 }
