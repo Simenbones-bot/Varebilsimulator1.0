@@ -215,7 +215,12 @@ function renderCars(el, dep) {
   el.innerHTML = `
     <div class="section-head">
       <h2>Biler – ${esc(dep.name)}</h2>
-      <button class="btn primary" data-action="add-car">+ Registrer bil</button>
+      <div class="btn-group">
+        <button class="btn small ghost" data-action="car-template">Mal ↓</button>
+        <button class="btn small ghost" data-action="import-cars">Importer CSV</button>
+        <button class="btn small ghost" data-action="export-cars">Eksporter CSV</button>
+        <button class="btn primary" data-action="add-car">+ Registrer bil</button>
+      </div>
     </div>
     ${
       cars.length
@@ -276,7 +281,12 @@ function renderKjoringer(el, dep) {
   el.innerHTML = `
     <div class="section-head">
       <h2>Ukesplan – ${esc(dep.name)}</h2>
-      <button class="btn primary" data-action="add-trip">+ Ny kjøring</button>
+      <div class="btn-group">
+        <button class="btn small ghost" data-action="trip-template">Mal ↓</button>
+        <button class="btn small ghost" data-action="import-trips">Importer CSV</button>
+        <button class="btn small ghost" data-action="export-trips">Eksporter CSV</button>
+        <button class="btn primary" data-action="add-trip">+ Ny kjøring</button>
+      </div>
     </div>
     ${renderSummary(dep)}
     ${renderGantt(dep)}
@@ -610,6 +620,18 @@ app.addEventListener("click", async (e) => {
       deleteTrip(dep, t.dataset.id);
       renderContent();
     }
+  } else if (action === "car-template") {
+    downloadCsv("biler_mal.csv", CAR_CSV_HEADERS + "\n" + CAR_CSV_EXAMPLE);
+  } else if (action === "export-cars" && dep) {
+    exportCarsCsv(dep);
+  } else if (action === "import-cars" && dep) {
+    pickCsvFile((text) => importCarsCsv(text, dep));
+  } else if (action === "trip-template") {
+    downloadCsv("kjoringer_mal.csv", TRIP_CSV_HEADERS + "\n" + TRIP_CSV_EXAMPLE);
+  } else if (action === "export-trips" && dep) {
+    exportTripsCsv(dep);
+  } else if (action === "import-trips" && dep) {
+    pickCsvFile((text) => importTripsCsv(text, dep));
   } else if (action === "add-fixed" && dep) {
     const res = await fixedCostModal();
     if (res) {
@@ -950,4 +972,196 @@ function num(v) {
 function tripCarIds(t) {
   if (Array.isArray(t.carIds)) return t.carIds;
   return t.carId ? [t.carId] : [];
+}
+
+// ---- CSV-eksport / -import -------------------------------------------------
+function downloadCsv(filename, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(
+    new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" })
+  );
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function parseCsv(text) {
+  const lines = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim()
+    .split("\n");
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(";").map((h) => h.trim());
+  return lines.slice(1).map((line) => {
+    const vals = line.split(";");
+    const row = {};
+    headers.forEach((h, i) => {
+      row[h] = (vals[i] ?? "").trim();
+    });
+    return row;
+  });
+}
+
+function pickCsvFile(onLoad) {
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = ".csv,text/csv";
+  inp.onchange = () => {
+    const file = inp.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => onLoad(e.target.result);
+    reader.readAsText(file, "UTF-8");
+  };
+  inp.click();
+}
+
+const DAY_NAMES = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
+const DAY_MAP = { Man: 0, Tir: 1, Ons: 2, Tor: 3, Fre: 4, "Lør": 5, "Søn": 6 };
+
+const CAR_CSV_HEADERS =
+  "regnr;modell;kategori;drivstoff;forbruk;leasing_kr_mnd;forsikring_kr_mnd;service_kr_ar;dekk_kr_ar;skade_kr;parkering_kr_mnd;leasing_startdato;eu_kontroll;budsjett_km_ar;beskrivelse";
+const CAR_CSV_EXAMPLE =
+  "AB12345;Ford Transit;Skapbil 19m3;diesel;8.5;5000;1200;8000;4000;0;500;;2026-06-01;50000;Varebil Oslo";
+
+const TRIP_CSV_HEADERS =
+  "kunde;type;bemanning;kategori;biler;starttid;sluttid;dager;km;kr_per_time;farge";
+const TRIP_CSV_EXAMPLE =
+  "Rema 1000;Fast rute;Enkelt;Skapbil 19m3;AB12345;08:00;16:00;Man|Tir|Ons|Tor|Fre;120;450;#4f46e5";
+
+function vehicleLabelOf(val) {
+  return VEHICLE_TYPES.find((v) => v.value === val && v.value)?.label || "";
+}
+function vehicleValueOf(lbl) {
+  const s = (lbl || "").trim().toLowerCase();
+  return VEHICLE_TYPES.find((v) => v.label.toLowerCase() === s)?.value || "";
+}
+
+function exportCarsCsv(dep) {
+  const rows = (dep.cars || []).map((c) => {
+    const k = c.costs || {};
+    return [
+      c.regNr,
+      c.model,
+      vehicleLabelOf(c.vehicleType),
+      c.fuelType,
+      c.consumption,
+      k.leasing,
+      k.insurance,
+      k.service,
+      k.tires,
+      k.damage,
+      k.parking,
+      k.leasingStart,
+      k.euControl,
+      k.budgetKm,
+      c.description
+    ]
+      .map((v) => v ?? "")
+      .join(";");
+  });
+  downloadCsv("biler.csv", CAR_CSV_HEADERS + "\n" + rows.join("\n"));
+}
+
+function importCarsCsv(text, dep) {
+  const rows = parseCsv(text);
+  let ok = 0;
+  rows.forEach((r) => {
+    if (!r.regnr) return;
+    addCar(dep, {
+      regNr: r.regnr,
+      model: r.modell || "",
+      vehicleType: vehicleValueOf(r.kategori),
+      description: r.beskrivelse || "",
+      fuelType: r.drivstoff === "el" ? "el" : "diesel",
+      consumption: num(r.forbruk),
+      costs: {
+        leasing: num(r.leasing_kr_mnd),
+        insurance: num(r.forsikring_kr_mnd),
+        service: num(r.service_kr_ar),
+        tires: num(r.dekk_kr_ar),
+        damage: num(r.skade_kr),
+        parking: num(r.parkering_kr_mnd),
+        leasingStart: r.leasing_startdato || "",
+        euControl: r.eu_kontroll || "",
+        budgetKm: num(r.budsjett_km_ar)
+      }
+    });
+    ok++;
+  });
+  renderContent();
+  alert(`Importerte ${ok} biler.`);
+}
+
+function exportTripsCsv(dep) {
+  const cars = dep.cars || [];
+  const rows = (dep.trips || []).map((t) => {
+    const regs = tripCarIds(t)
+      .map((id) => cars.find((c) => c.id === id)?.regNr)
+      .filter(Boolean)
+      .join("|");
+    const dager = (t.days || [])
+      .slice()
+      .sort((a, b) => a - b)
+      .map((d) => DAY_NAMES[d])
+      .join("|");
+    return [
+      t.customer,
+      t.type === "fast_rute" ? "Fast rute" : "Annet",
+      t.staffing === "dobbel" ? "Dobbel" : "Enkelt",
+      vehicleLabelOf(t.vehicleType),
+      regs,
+      t.startTime,
+      t.endTime,
+      dager,
+      t.km,
+      t.revenuePerHour,
+      t.color || ""
+    ]
+      .map((v) => v ?? "")
+      .join(";");
+  });
+  downloadCsv("kjoringer.csv", TRIP_CSV_HEADERS + "\n" + rows.join("\n"));
+}
+
+function importTripsCsv(text, dep) {
+  const cars = dep.cars || [];
+  const rows = parseCsv(text);
+  let ok = 0;
+  rows.forEach((r) => {
+    if (!r.kunde) return;
+    const carIds = (r.biler || "")
+      .split("|")
+      .map(
+        (reg) =>
+          cars.find(
+            (c) =>
+              (c.regNr || "").toLowerCase() === reg.trim().toLowerCase()
+          )?.id
+      )
+      .filter(Boolean);
+    const days = (r.dager || "")
+      .split("|")
+      .map((d) => DAY_MAP[d.trim()])
+      .filter((d) => d !== undefined);
+    addTrip(dep, {
+      customer: r.kunde,
+      type: r.type === "Fast rute" ? "fast_rute" : "annet",
+      staffing: r.bemanning === "Dobbel" ? "dobbel" : "enkelt",
+      vehicleType: vehicleValueOf(r.kategori),
+      carIds,
+      startTime: r.starttid || "08:00",
+      endTime: r.sluttid || "16:00",
+      days,
+      km: num(r.km),
+      revenuePerHour: num(r.kr_per_time),
+      color:
+        r.farge ||
+        TRIP_COLORS[(dep.trips.length || 0) % TRIP_COLORS.length]
+    });
+    ok++;
+  });
+  renderContent();
+  alert(`Importerte ${ok} kjøringer.`);
 }

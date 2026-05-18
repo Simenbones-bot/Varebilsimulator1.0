@@ -183,6 +183,7 @@ code {
   margin-bottom: 1rem;
 }
 .section-head.sub { margin-top: 1.75rem; }
+.btn-group { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
 
 /* Grid / bilkort ----------------------------------------------------------- */
 .grid {
