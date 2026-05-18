@@ -514,27 +514,27 @@ function renderSummary(dep) {
   const afterFaste = afterLonn - fFasteCut;
   const afterKons  = afterFaste - fKonsCut;
   const funnelSteps = [
-    { label: "Inntekt",              value: fRevMonth },
-    { label: "Etter lønn",           value: afterLonn,  cut: fLonnCut,   cutLabel: fLonnLabel },
-    { label: "Etter faste kost.",    value: afterFaste, cut: fFasteCut,  cutLabel: fFasteLabel },
-    { label: "Etter konsernfelles",  value: afterKons,  cut: fKonsCut,   cutLabel: "Konsernfelles" },
-    { label: "Overskudd",            value: fResult,    cut: fMarginCut, cutLabel: "Påslag" }
+    { label: "Inntekt",             value: fRevMonth },
+    { label: "Etter lønn",          value: afterLonn,  cut: fLonnCut,   cutLabel: fLonnLabel },
+    { label: "Etter faste kost.",   value: afterFaste, cut: fFasteCut,  cutLabel: fFasteLabel },
+    { label: "Etter konsernfelles", value: afterKons,  cut: fKonsCut,   cutLabel: "Konsernfelles" },
+    { label: "Overskudd",           value: fResult,    cut: fMarginCut, cutLabel: "Påslag" }
   ];
-  const fPct = (v) => Math.max(4, (Math.max(0, v) / (fRevMonth || 1)) * 100).toFixed(1);
+  const fMax = Math.max(fRevMonth, 1);
   const funnelHtml = funnelSteps.map((s, i) => {
     const isLast = i === funnelSteps.length - 1;
-    const barCls = isLast
-      ? (s.value >= 0 ? "funnel-bar pos-bar" : "funnel-bar neg-bar")
-      : "funnel-bar";
-    const cutRow = s.cut != null
-      ? `<div class="funnel-cut">▼ <span>${esc(s.cutLabel)}: ${fmtKr(s.cut)}</span></div>`
-      : "";
-    return `${cutRow}
-      <div class="funnel-row" style="width:${fPct(s.value)}%">
-        <div class="${barCls}">
-          <span class="funnel-name">${esc(s.label)}</span>
-          <span class="funnel-val">${fmtKr(s.value)}</span>
-        </div>
+    const fillCls = isLast
+      ? (s.value >= 0 ? "funnel-fill pos-bar" : "funnel-fill neg-bar")
+      : "funnel-fill";
+    const hPct = Math.max(2, (Math.max(0, s.value) / fMax) * 100).toFixed(1);
+    const cut = s.cut != null
+      ? `<div class="funnel-minus">− ${esc(s.cutLabel)}<br><strong>${fmtKr(s.cut)}</strong></div>`
+      : `<div class="funnel-minus"></div>`;
+    return `<div class="funnel-col">
+        <div class="funnel-amount${isLast ? (s.value >= 0 ? " pos" : " neg") : ""}">${fmtKr(s.value)}</div>
+        <div class="funnel-track"><div class="${fillCls}" style="height:${hPct}%"></div></div>
+        <div class="funnel-label">${esc(s.label)}</div>
+        ${cut}
       </div>`;
   }).join("");
 
@@ -546,7 +546,7 @@ function renderSummary(dep) {
     : "";
 
   const funnelSection = monthRevenue > 0
-    ? `<div class="card funnel-card">${carTabs}${funnelHtml}</div>`
+    ? `<div class="card funnel-card">${carTabs}<div class="funnel">${funnelHtml}</div></div>`
     : "";
 
   return `
