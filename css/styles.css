@@ -183,6 +183,16 @@ code {
   margin-bottom: 1rem;
 }
 .section-head.sub { margin-top: 1.75rem; }
+.btn-collapse {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: .8rem;
+  color: var(--muted);
+  padding: 0 .3rem 0 0;
+  line-height: 1;
+}
+.btn-collapse:hover { color: var(--text); }
 .btn-group { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
 
 /* Grid / bilkort ----------------------------------------------------------- */

@@ -62,6 +62,7 @@ const VEHICLE_TYPES = [
 
 let view = "kjøringer";
 let ganttExpanded = false;
+let tripsCollapsed = false;
 
 // ---- Oppstart --------------------------------------------------------------
 (async function init() {
@@ -299,10 +300,14 @@ function renderKjoringer(el, dep) {
     ${renderSummary(dep)}
     ${renderGantt(dep, ganttExpanded)}
     <div class="section-head sub">
-      <h3>Kjøringer (${trips.length})</h3>
+      <h3>
+        <button class="btn-collapse" data-action="toggle-trips" aria-label="Vis/skjul kjøringer">
+          ${tripsCollapsed ? "▶" : "▼"}
+        </button>
+        Kjøringer (${trips.length})
+      </h3>
     </div>
-    ${
-      trips.length
+    ${tripsCollapsed ? "" : trips.length
         ? `<table class="list">
             <thead><tr>
               <th>Kunde</th><th>Type</th><th>Bemanning</th><th>Bil</th>
@@ -736,6 +741,9 @@ app.addEventListener("click", async (e) => {
       deleteTrip(dep, t.dataset.id);
       renderContent();
     }
+  } else if (action === "toggle-trips") {
+    tripsCollapsed = !tripsCollapsed;
+    renderContent();
   } else if (action === "toggle-gantt") {
     ganttExpanded = !ganttExpanded;
     renderContent();
