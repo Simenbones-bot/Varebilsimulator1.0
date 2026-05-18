@@ -166,7 +166,7 @@ function renderWeekHeader() {
   </div>`;
 }
 
-export function renderGantt(dep) {
+export function renderGantt(dep, expanded = false) {
   const cars = (dep.cars || [])
     .slice()
     .sort((a, b) => (a.regNr || "").localeCompare(b.regNr || ""));
@@ -215,7 +215,7 @@ export function renderGantt(dep) {
         </div>`
       : "";
 
-  return `<div class="gantt">
+  return `<div class="gantt${expanded ? " gantt--expanded" : ""}">
     ${renderWeekHeader()}
     ${carRows}
     ${unassignedRow}

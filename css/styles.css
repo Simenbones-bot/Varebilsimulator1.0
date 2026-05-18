@@ -512,6 +512,14 @@ code {
 }
 .tip-row span { color: #aab1c5; }
 
+/* Detaljkolonner skjult som standard, synlige ved .gantt--expanded ---------- */
+.gantt .util-cell,
+.gantt .cost-cell,
+.gantt .income-cell { display: none; }
+.gantt.gantt--expanded .util-cell,
+.gantt.gantt--expanded .cost-cell,
+.gantt.gantt--expanded .income-cell { display: flex; }
+
 /* Bilutnyttelse-kolonne ---------------------------------------------------- */
 .util-cell {
   width: 76px;

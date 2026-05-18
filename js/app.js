@@ -58,6 +58,7 @@ const VEHICLE_TYPES = [
 ];
 
 let view = "kjøringer";
+let ganttExpanded = false;
 
 // ---- Oppstart --------------------------------------------------------------
 (async function init() {
@@ -283,6 +284,9 @@ function renderKjoringer(el, dep) {
     <div class="section-head">
       <h2>Ukesplan – ${esc(dep.name)}</h2>
       <div class="btn-group">
+        <button class="btn small ghost" data-action="toggle-gantt">${
+          ganttExpanded ? "⊖ Enkel visning" : "⊕ Detaljer"
+        }</button>
         <button class="btn small ghost" data-action="trip-template">Mal ↓</button>
         <button class="btn small ghost" data-action="import-trips">Importer CSV</button>
         <button class="btn small ghost" data-action="export-trips">Eksporter CSV</button>
@@ -290,7 +294,7 @@ function renderKjoringer(el, dep) {
       </div>
     </div>
     ${renderSummary(dep)}
-    ${renderGantt(dep)}
+    ${renderGantt(dep, ganttExpanded)}
     <div class="section-head sub">
       <h3>Kjøringer (${trips.length})</h3>
     </div>
@@ -645,6 +649,9 @@ app.addEventListener("click", async (e) => {
       deleteTrip(dep, t.dataset.id);
       renderContent();
     }
+  } else if (action === "toggle-gantt") {
+    ganttExpanded = !ganttExpanded;
+    renderContent();
   } else if (action === "car-template") {
     downloadCsv("biler_mal.csv", CAR_CSV_HEADERS + "\n" + CAR_CSV_EXAMPLE);
   } else if (action === "export-cars" && dep) {
