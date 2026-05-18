@@ -37,6 +37,9 @@ function normalizeDepartment(dep) {
   if (!dep.personnel || typeof dep.personnel !== "object") {
     dep.personnel = { driverRate: 250, socialRate: 36 };
   }
+  if (!dep.markups || typeof dep.markups !== "object") {
+    dep.markups = { konsernfelles: 6, margin: 5 };
+  }
   dep.trips.forEach((t) => {
     if (!Array.isArray(t.carIds)) {
       t.carIds = t.carId ? [t.carId] : [];
@@ -153,5 +156,10 @@ export function setFuel(dep, fuel) {
 
 export function setPersonnel(dep, personnel) {
   dep.personnel = { ...(dep.personnel || {}), ...personnel };
+  save();
+}
+
+export function setMarkups(dep, markups) {
+  dep.markups = { ...(dep.markups || {}), ...markups };
   save();
 }

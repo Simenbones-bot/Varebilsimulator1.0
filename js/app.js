@@ -27,7 +27,8 @@ import {
   updateFixedCost,
   deleteFixedCost,
   setFuel,
-  setPersonnel
+  setPersonnel,
+  setMarkups
 } from "./state.js";
 import { renderGantt } from "./gantt.js";
 import {
@@ -349,10 +350,13 @@ function renderSummary(dep) {
   const p = dep.personnel || { driverRate: 250, socialRate: 36 };
   const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
   const carCost = cars.reduce((s, c) => s + carMonthly(c), 0);
-  const fixedCost = (dep.fixedCosts || []).reduce(
+  const fixedCostBase = (dep.fixedCosts || []).reduce(
     (s, f) => s + num(f.amount),
     0
   );
+  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
+  const fixedCost =
+    fixedCostBase * (1 + num(mkp.konsernfelles) / 100 + num(mkp.margin) / 100);
   let weekKm = 0;
   let weekRevenue = 0;
   let fuelWeek = 0;
@@ -408,10 +412,16 @@ function renderSummary(dep) {
 function renderFixedCosts(el, dep) {
   const items = dep.fixedCosts || [];
   const sum = items.reduce((s, f) => s + num(f.amount), 0);
+  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
+  const konsAmt = sum * (num(mkp.konsernfelles) / 100);
+  const marginAmt = sum * (num(mkp.margin) / 100);
   el.innerHTML = `
     <div class="section-head">
       <h2>Faste kostnader – ${esc(dep.name)}</h2>
-      <button class="btn primary" data-action="add-fixed">+ Ny kostnad</button>
+      <div class="btn-group">
+        <button class="btn small ghost" data-action="edit-markups">Rediger påslag</button>
+        <button class="btn primary" data-action="add-fixed">+ Ny kostnad</button>
+      </div>
     </div>
     ${
       items.length
@@ -442,7 +452,22 @@ function renderFixedCosts(el, dep) {
             </tr></tfoot>
           </table>`
         : `<div class="card empty"><p>Ingen faste kostnader registrert.</p></div>`
-    }`;
+    }
+    <div class="summary" style="margin-top:1rem">
+      <div class="stat"><span>Sum poster</span><strong>${fmtKr(sum)} /mnd</strong></div>
+      <div class="stat">
+        <span>Konsernfelles (${num(mkp.konsernfelles)} %)</span>
+        <strong>+ ${fmtKr(konsAmt)} /mnd</strong>
+      </div>
+      <div class="stat">
+        <span>Margin (${num(mkp.margin)} %)</span>
+        <strong>+ ${fmtKr(marginAmt)} /mnd</strong>
+      </div>
+      <div class="stat">
+        <span>Totalt med påslag</span>
+        <strong>${fmtKr(sum + konsAmt + marginAmt)} /mnd</strong>
+      </div>
+    </div>`;
 }
 
 // ---- Drivstoff -------------------------------------------------------------
@@ -662,6 +687,12 @@ app.addEventListener("click", async (e) => {
     const res = await personnelModal(dep.personnel);
     if (res) {
       setPersonnel(dep, res);
+      renderContent();
+    }
+  } else if (action === "edit-markups" && dep) {
+    const res = await markupsModal(dep.markups);
+    if (res) {
+      setMarkups(dep, res);
       renderContent();
     }
   } else if (action === "add-user") {
@@ -964,6 +995,14 @@ function fuelModal(fuel) {
   return modal("Drivstoffpriser", [
     { name: "dieselPrice", label: "Dieselpris (kr/liter)", type: "number", value: f.dieselPrice },
     { name: "electricityPrice", label: "Strompris (kr/kWh)", type: "number", value: f.electricityPrice }
+  ]);
+}
+
+function markupsModal(markups) {
+  const m = markups || { konsernfelles: 6, margin: 5 };
+  return modal("Påslag på faste kostnader", [
+    { name: "konsernfelles", label: "Konsernfelles (%)", type: "number", value: m.konsernfelles },
+    { name: "margin", label: "Margin (%)", type: "number", value: m.margin }
   ]);
 }
 
