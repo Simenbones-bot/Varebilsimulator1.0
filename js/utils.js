@@ -68,7 +68,7 @@ export function fmtHours(min) {
 
 // Liten "i"-sirkel som viser en forklaring i den eksisterende tooltip-en.
 export function infoIcon(html) {
-  return `<span class="info-i" data-tip="${esc(html)}" aria-label="Forklaring">i</span>`;
+  return `<span class="info-i" data-tip="${esc(html)}" aria-label="Forklaring">ⓘ</span>`;
 }
 
 // Bygger .tip-row-rader fra [["Ledetekst","Verdi"], ...]

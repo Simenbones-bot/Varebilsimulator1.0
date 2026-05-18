@@ -263,6 +263,27 @@ code {
 .pos { color: var(--ok); }
 .neg { color: var(--danger); }
 
+/* Kostnadsflyt-funnel -------------------------------------------------------- */
+.funnel-card { padding: 1rem 1.25rem; margin-bottom: .5rem; }
+.funnel-row  { margin: 0 auto; }
+.funnel-bar  {
+  height: 42px;
+  background: var(--primary);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 .85rem;
+  color: #fff;
+  overflow: hidden;
+}
+.funnel-bar.pos-bar { background: var(--ok); }
+.funnel-bar.neg-bar { background: var(--danger); }
+.funnel-name { font-size: .78rem; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.funnel-val  { font-size: .88rem; font-weight: 700; white-space: nowrap; margin-left: .5rem; flex-shrink: 0; }
+.funnel-cut  { text-align: center; font-size: .72rem; color: var(--muted); padding: .25rem 0; }
+.funnel-cut span { color: var(--danger); }
+
 /* Gantt -------------------------------------------------------------------- */
 .gantt {
   background: var(--surface);
@@ -536,14 +557,12 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   margin-left: 4px;
-  border-radius: 50%;
-  background: #c7ccd9;
-  color: #fff;
-  font-size: 9px;
-  font-weight: 700;
+  color: #b0b8cc;
+  font-size: 14px;
+  font-weight: 400;
   font-style: normal;
   line-height: 1;
   text-transform: none;

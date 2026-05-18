@@ -475,6 +475,40 @@ function renderSummary(dep) {
   const statCard = ([a, b, tip]) =>
     `<div class="stat"><span>${a}${tip ? infoIcon(tip) : ""}</span><strong>${b}</strong></div>`;
 
+  // Funnel
+  const lonnTotal  = personnelMonth + lederMonth + koordinatorMonth;
+  const fasteTotal = carCost + fixedCost + fuelMonth;
+  const afterLonn  = monthRevenue - lonnTotal;
+  const afterFaste = afterLonn - fasteTotal;
+  const afterKons  = afterFaste - konsernfellesMonth;
+  const funnelSteps = [
+    { label: "Inntekt",              value: monthRevenue },
+    { label: "Etter lønn",           value: afterLonn,  cut: lonnTotal,           cutLabel: "Lønn" },
+    { label: "Etter faste kost.",    value: afterFaste, cut: fasteTotal,           cutLabel: "Bil + faste + drivstoff" },
+    { label: "Etter konsernfelles",  value: afterKons,  cut: konsernfellesMonth,   cutLabel: "Konsernfelles" },
+    { label: "Overskudd",            value: result,     cut: marginMonth,          cutLabel: "Påslag" }
+  ];
+  const fPct = (v) => Math.max(4, (Math.max(0, v) / (monthRevenue || 1)) * 100).toFixed(1);
+  const funnelHtml = funnelSteps.map((s, i) => {
+    const isLast = i === funnelSteps.length - 1;
+    const barCls = isLast
+      ? (s.value >= 0 ? "funnel-bar pos-bar" : "funnel-bar neg-bar")
+      : "funnel-bar";
+    const cutRow = s.cut != null
+      ? `<div class="funnel-cut">▼ <span>${esc(s.cutLabel)}: ${fmtKr(s.cut)}</span></div>`
+      : "";
+    return `${cutRow}
+      <div class="funnel-row" style="width:${fPct(s.value)}%">
+        <div class="${barCls}">
+          <span class="funnel-name">${esc(s.label)}</span>
+          <span class="funnel-val">${fmtKr(s.value)}</span>
+        </div>
+      </div>`;
+  }).join("");
+  const funnelSection = monthRevenue > 0
+    ? `<div class="card funnel-card">${funnelHtml}</div>`
+    : "";
+
   return `
     <div class="summary-hero">
       <div class="stat stat-hero">
@@ -490,6 +524,7 @@ function renderSummary(dep) {
         <strong class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</strong>
       </div>
     </div>
+    ${funnelSection}
     <div class="section-head sub" style="margin-top:.75rem;margin-bottom:.5rem">
       <h3>Detaljer</h3>
       <button class="btn small ghost" data-action="toggle-summary">
