@@ -67,7 +67,7 @@ function carUtilization(car, trips) {
   return ((bookedMins / TOTAL_MINS) * 100).toFixed(1);
 }
 
-function tripTooltip(trip) {
+function tripTooltip(trip, costPerHour) {
   const mins = durationMinutes(trip.startTime, trip.endTime);
   const hours = mins / 60;
   const revenue = hours * (Number(trip.revenuePerHour) || 0);
@@ -78,7 +78,14 @@ function tripTooltip(trip) {
     ["Tid", `${esc(trip.startTime)}–${esc(trip.endTime)} (${fmtHours(mins)})`],
     ["Kilometer", `${fmtNum(trip.km)} km`],
     ["Inntekt pr. time", fmtKr(trip.revenuePerHour)],
-    ["Inntekt pr. kjøring", fmtKr(revenue)]
+    ["Inntekt pr. kjøring", fmtKr(revenue)],
+    ...(costPerHour != null
+      ? [
+          ["Driftskostnad pr. time", fmtKr(costPerHour)],
+          ["Driftskostnad pr. kjøring", fmtKr(costPerHour * hours)],
+          ["Resultat pr. kjøring", fmtKr(revenue - costPerHour * hours)]
+        ]
+      : [])
   ];
   return rows
     .map(
@@ -88,7 +95,7 @@ function tripTooltip(trip) {
     .join("");
 }
 
-function renderTrack(carTrips) {
+function renderTrack(carTrips, costPerHour) {
   // Dag-separatorer ved 1/7, 2/7 … 6/7
   let seps = "";
   for (let i = 1; i < 7; i++) {
@@ -112,7 +119,7 @@ function renderTrack(carTrips) {
     const s = toMinutes(trip.startTime);
     if (s === null) return;
     const dur = durationMinutes(trip.startTime, trip.endTime) || 30;
-    const tipAttr = esc(tripTooltip(trip));
+    const tipAttr = esc(tripTooltip(trip, costPerHour ?? null));
 
     (trip.days || []).forEach((dayIndex) => {
       const left = (((dayIndex * 1440 + s) / TOTAL_MINS) * 100).toFixed(4);
@@ -183,7 +190,7 @@ export function renderGantt(dep) {
           <span class="car-regnr">${esc(car.regNr || "—")}</span>
           ${car.model ? `<span class="car-model">${esc(car.model)}</span>` : ""}
         </div>
-        <div class="gantt-track">${renderTrack(carTrips)}</div>
+        <div class="gantt-track">${renderTrack(carTrips, oc?.costPerHour)}</div>
         <div class="util-cell">${util} %</div>
         <div class="cost-cell ${oc && oc.loss ? "neg" : ""}">${
         oc ? fmtKr(oc.costPerHour) : "–"
