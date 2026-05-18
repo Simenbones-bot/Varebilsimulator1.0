@@ -316,7 +316,9 @@ function tripRow(t, dep) {
   const vehicleLabel = VEHICLE_TYPES.find((v) => v.value === t.vehicleType && v.value)?.label || "–";
   return `<tr>
     <td>${esc(t.customer || "(uten navn)")}</td>
-    <td><span class="pill type-${esc(t.type || "annet")}">${
+    <td><span class="pill type-${esc(t.type || "annet")}"${
+    t.color ? ` style="background:${esc(t.color)}"` : ""
+  }>${
     t.type === "fast_rute" ? "Fast rute" : "Annet"
   }</span></td>
     <td>${t.staffing === "dobbel" ? "Dobbel" : "Enkelt"}</td>
