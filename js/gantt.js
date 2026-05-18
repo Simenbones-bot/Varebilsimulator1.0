@@ -191,6 +191,7 @@ function renderWeekHeader() {
     <div class="car-label"></div>
     <div class="gantt-weekheader">${cells}</div>
     <div class="util-cell util-head">Utnyttelse</div>
+    <div class="fte-cell fte-head">Å.verk</div>
     <div class="cost-cell cost-head">Drift/time</div>
     <div class="income-cell income-head">Inntekt/time</div>
     <div class="result-cell result-head">Resultat /mnd</div>
@@ -216,6 +217,12 @@ export function renderGantt(dep, expanded = false) {
       const carTrips = trips.filter((t) => tripCarIds(t).includes(car.id));
       const util = carUtilization(car, trips);
       const oc = carCostPerHour(car, trips, dep);
+      const carFteWeekly = carTrips.reduce((s, t) => {
+        const h = durationMinutes(t.startTime, t.endTime) / 60;
+        const staffMult = t.staffing === "dobbel" ? 2 : 1;
+        return s + h * (t.days || []).length * staffMult;
+      }, 0);
+      const carFte = carFteWeekly / 37.5;
       const totalMonthHours =
         carTrips.reduce(
           (s, t) =>
@@ -235,6 +242,7 @@ export function renderGantt(dep, expanded = false) {
         </div>
         <div class="gantt-track">${renderTrack(carTrips, tripCosts)}</div>
         <div class="util-cell">${util} %</div>
+        <div class="fte-cell">${carFte > 0 ? carFte.toFixed(2) : "–"}</div>
         <div class="cost-cell ${oc && oc.loss ? "neg" : ""}">${
         oc ? fmtKr(oc.costPerHour) : "–"
       }</div>
@@ -256,6 +264,7 @@ export function renderGantt(dep, expanded = false) {
           </div>
           <div class="gantt-track">${renderTrack(unassigned)}</div>
           <div class="util-cell">–</div>
+          <div class="fte-cell">–</div>
           <div class="cost-cell">–</div>
           <div class="income-cell">–</div>
           <div class="result-cell">–</div>

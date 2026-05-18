@@ -28,7 +28,10 @@ import {
   deleteFixedCost,
   setFuel,
   setPersonnel,
-  setMarkups
+  setMarkups,
+  addPersonnelRole,
+  updatePersonnelRole,
+  deletePersonnelRole
 } from "./state.js";
 import { renderGantt } from "./gantt.js";
 import {
@@ -384,21 +387,33 @@ function renderSummary(dep) {
   const fuelMonth = fuelWeek * MONTH_FACTOR;
   const personnelMonth = weekDriverHours * effectiveRate * MONTH_FACTOR;
   const monthRevenue = weekRevenue * MONTH_FACTOR;
-  const driftsbase = carCost + fuelMonth + personnelMonth;
+  const socialFactor = 1 + num(p.socialRate) / 100;
+  const lederMonth = (dep.personnel.ledere || []).reduce(
+    (s, l) => s + (num(l.aarslonn) * num(l.aarsrverk)) / 12 * socialFactor, 0);
+  const koordinatorMonth = (dep.personnel.koordinatorer || []).reduce(
+    (s, k) => s + (num(k.aarslonn) * num(k.aarsrverk)) / 12 * socialFactor, 0);
+  const driftsbase = carCost + fuelMonth + personnelMonth + lederMonth + koordinatorMonth;
   const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
   const konsernfellesMonth = driftsbase * (num(mkp.konsernfelles) / 100);
   const marginMonth = driftsbase * (num(mkp.margin) / 100);
   const result =
     monthRevenue - carCost - fixedCost - fuelMonth - personnelMonth -
-    konsernfellesMonth - marginMonth;
+    lederMonth - koordinatorMonth - konsernfellesMonth - marginMonth;
+  const driverFte = weekDriverHours / 37.5;
+  const lederFte = (dep.personnel.ledere || []).reduce((s, l) => s + num(l.aarsrverk), 0);
+  const koordinatorFte = (dep.personnel.koordinatorer || []).reduce((s, k) => s + num(k.aarsrverk), 0);
+  const totalFte = driverFte + lederFte + koordinatorFte;
   const cards = [
     ["Biler", `${cars.length}`],
     ["Bilkostnad", `${fmtKr(carCost)} /mnd`],
     ["Faste kostnader", `${fmtKr(fixedCost)} /mnd`],
     ["Drivstoff", `${fmtKr(fuelMonth)} /mnd`],
-    ["Personal", `${fmtKr(personnelMonth)} /mnd`],
+    ["Personal (sjåfør)", `${fmtKr(personnelMonth)} /mnd`],
+    ...(lederMonth > 0 ? [["Ledelse", `${fmtKr(lederMonth)} /mnd`]] : []),
+    ...(koordinatorMonth > 0 ? [["Koordinator", `${fmtKr(koordinatorMonth)} /mnd`]] : []),
     ["Konsernfelles", `${fmtKr(konsernfellesMonth)} /mnd`],
     ["Margin", `${fmtKr(marginMonth)} /mnd`],
+    ["Totalt årsverk", `${totalFte.toFixed(2)} å.v.`],
     ["Km pr. uke", `${fmtNum(weekKm)} km`],
     ["Inntekt pr. uke", fmtKr(weekRevenue)],
     ["Inntekt pr. virkedag", fmtKr(weekRevenue / 5)],
@@ -505,7 +520,56 @@ function renderFuel(el, dep) {
 function renderPersonnel(el, dep) {
   const p = dep.personnel || { driverRate: 250, socialRate: 36 };
   const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
+  const socialFactor = 1 + num(p.socialRate) / 100;
   const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
+  const ledere = dep.personnel.ledere || [];
+  const koordinatorer = dep.personnel.koordinatorer || [];
+  const lederMonth = ledere.reduce(
+    (s, l) => s + (num(l.aarslonn) * num(l.aarsrverk)) / 12 * socialFactor, 0);
+  const koordinatorMonth = koordinatorer.reduce(
+    (s, k) => s + (num(k.aarslonn) * num(k.aarsrverk)) / 12 * socialFactor, 0);
+
+  // Driver FTE from trips
+  let weekDriverHours = 0;
+  (dep.trips || []).forEach((t) => {
+    const occ = (t.days || []).length;
+    const hours = durationMinutes(t.startTime, t.endTime) / 60;
+    const staffMult = t.staffing === "dobbel" ? 2 : 1;
+    const m = Math.max(tripCarIds(t).filter((id) => (dep.cars || []).find((c) => c.id === id)).length, 1);
+    weekDriverHours += hours * occ * m * staffMult;
+  });
+  const driverFte = weekDriverHours / 37.5;
+  const lederFte = ledere.reduce((s, l) => s + num(l.aarsrverk), 0);
+  const koordinatorFte = koordinatorer.reduce((s, k) => s + num(k.aarsrverk), 0);
+  const totalFte = driverFte + lederFte + koordinatorFte;
+
+  const roleTable = (items, role) => {
+    const monthCosts = items.map(
+      (x) => (num(x.aarslonn) * num(x.aarsrverk)) / 12 * socialFactor
+    );
+    const sum = monthCosts.reduce((s, v) => s + v, 0);
+    if (!items.length) return `<div class="card empty"><p>Ingen registrert.</p></div>`;
+    return `<table class="list">
+      <thead><tr><th>Navn</th><th>Årslønn</th><th>Årsverk</th><th>/mnd (m/soc.)</th><th></th></tr></thead>
+      <tbody>
+        ${items.map((x, i) => `<tr>
+          <td>${esc(x.label || (role === "leder" ? "Leder" : "Koordinator"))}</td>
+          <td>${fmtKr(x.aarslonn)}</td>
+          <td>${num(x.aarsrverk)}</td>
+          <td>${fmtKr(monthCosts[i])}</td>
+          <td class="row-actions">
+            <button class="btn small" data-action="edit-personnel-role" data-role="${role}" data-id="${esc(x.id)}">Rediger</button>
+            <button class="btn small ghost danger" data-action="del-personnel-role" data-role="${role}" data-id="${esc(x.id)}">Slett</button>
+          </td>
+        </tr>`).join("")}
+      </tbody>
+      <tfoot><tr>
+        <td><strong>Sum</strong></td><td></td><td></td>
+        <td><strong>${fmtKr(sum)} /mnd</strong></td><td></td>
+      </tr></tfoot>
+    </table>`;
+  };
+
   el.innerHTML = `
     <div class="section-head">
       <h2>Personal – ${esc(dep.name)}</h2>
@@ -520,6 +584,29 @@ function renderPersonnel(el, dep) {
       Effektiv timesats = sjåfør × (1 + sosiale kostnader %).<br>
       Personalkostnad pr. måned beregnes automatisk fra alle kjøringer og vises i oppsummeringen.
     </div>
+
+    <div class="section-head sub" style="margin-top:1.5rem">
+      <h3>Ledelse</h3>
+      <button class="btn small primary" data-action="add-personnel-role" data-role="leder">+ Legg til leder</button>
+    </div>
+    ${roleTable(ledere, "leder")}
+
+    <div class="section-head sub" style="margin-top:1.5rem">
+      <h3>Koordinatorer</h3>
+      <button class="btn small primary" data-action="add-personnel-role" data-role="koordinator">+ Legg til koordinator</button>
+    </div>
+    ${roleTable(koordinatorer, "koordinator")}
+
+    <div class="section-head sub" style="margin-top:1.5rem">
+      <h3>Totalt årsverk</h3>
+    </div>
+    <div class="summary">
+      <div class="stat"><span>Sjåfører</span><strong>${driverFte.toFixed(2)} å.v.</strong></div>
+      <div class="stat"><span>Ledelse</span><strong>${lederFte.toFixed(2)} å.v.</strong></div>
+      <div class="stat"><span>Koordinatorer</span><strong>${koordinatorFte.toFixed(2)} å.v.</strong></div>
+      <div class="stat"><span>Totalt</span><strong>${totalFte.toFixed(2)} å.v.</strong></div>
+    </div>
+
     <div class="section-head sub" style="margin-top:1.5rem">
       <h3>Påslag på drift</h3>
       <button class="btn small ghost" data-action="edit-markups">Rediger</button>
@@ -698,6 +785,28 @@ app.addEventListener("click", async (e) => {
     const res = await markupsModal(dep.markups);
     if (res) {
       setMarkups(dep, res);
+      renderContent();
+    }
+  } else if (action === "add-personnel-role" && dep) {
+    const role = t.dataset.role;
+    const res = await personnelRoleModal(role);
+    if (res) {
+      addPersonnelRole(dep, role, res);
+      renderContent();
+    }
+  } else if (action === "edit-personnel-role" && dep) {
+    const role = t.dataset.role;
+    const key = role === "leder" ? "ledere" : "koordinatorer";
+    const entry = (dep.personnel[key] || []).find((x) => x.id === t.dataset.id);
+    const res = await personnelRoleModal(role, entry);
+    if (res) {
+      updatePersonnelRole(dep, role, t.dataset.id, res);
+      renderContent();
+    }
+  } else if (action === "del-personnel-role" && dep) {
+    const role = t.dataset.role;
+    if (confirm(`Slette denne ${role === "leder" ? "lederen" : "koordinatoren"}?`)) {
+      deletePersonnelRole(dep, role, t.dataset.id);
       renderContent();
     }
   } else if (action === "add-user") {
@@ -992,6 +1101,17 @@ function personnelModal(personnel) {
   return modal("Personalkostnader", [
     { name: "driverRate", label: "Sjåfør pr. time (kr/t)", type: "number", value: p.driverRate },
     { name: "socialRate", label: "Sosiale kostnader (%)", type: "number", value: p.socialRate }
+  ]);
+}
+
+function personnelRoleModal(role, entry = null) {
+  const title = entry
+    ? `Rediger ${role === "leder" ? "leder" : "koordinator"}`
+    : `Legg til ${role === "leder" ? "leder" : "koordinator"}`;
+  return modal(title, [
+    { name: "label", label: "Navn/tittel (valgfritt)", type: "text", value: entry?.label || "" },
+    { name: "aarslonn", label: "Årslønn (kr)", type: "number", required: true, value: entry?.aarslonn ?? "" },
+    { name: "aarsrverk", label: "Årsverk (f.eks. 0.5 = 50 %)", type: "number", required: true, value: entry?.aarsrverk ?? 1 }
   ]);
 }
 

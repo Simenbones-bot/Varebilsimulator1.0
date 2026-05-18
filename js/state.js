@@ -40,6 +40,8 @@ function normalizeDepartment(dep) {
   if (!dep.markups || typeof dep.markups !== "object") {
     dep.markups = { konsernfelles: 6, margin: 5 };
   }
+  if (!Array.isArray(dep.personnel.ledere)) dep.personnel.ledere = [];
+  if (!Array.isArray(dep.personnel.koordinatorer)) dep.personnel.koordinatorer = [];
   dep.trips.forEach((t) => {
     if (!Array.isArray(t.carIds)) {
       t.carIds = t.carId ? [t.carId] : [];
@@ -79,7 +81,7 @@ export function addDepartment(name) {
     trips: [],
     fixedCosts: [],
     fuel: { dieselPrice: 0, electricityPrice: 0 },
-    personnel: { driverRate: 250, socialRate: 36 }
+    personnel: { driverRate: 250, socialRate: 36, ledere: [], koordinatorer: [] }
   };
   State.data.departments.push(dep);
   State.data.selectedDepartmentId = dep.id;
@@ -161,5 +163,26 @@ export function setPersonnel(dep, personnel) {
 
 export function setMarkups(dep, markups) {
   dep.markups = { ...(dep.markups || {}), ...markups };
+  save();
+}
+
+export function addPersonnelRole(dep, role, entry) {
+  const key = role === "leder" ? "ledere" : "koordinatorer";
+  if (!Array.isArray(dep.personnel[key])) dep.personnel[key] = [];
+  dep.personnel[key].push({ id: uid(), ...entry });
+  save();
+}
+
+export function updatePersonnelRole(dep, role, id, entry) {
+  const key = role === "leder" ? "ledere" : "koordinatorer";
+  const arr = dep.personnel[key] || [];
+  const idx = arr.findIndex((x) => x.id === id);
+  if (idx !== -1) arr[idx] = { ...arr[idx], ...entry };
+  save();
+}
+
+export function deletePersonnelRole(dep, role, id) {
+  const key = role === "leder" ? "ledere" : "koordinatorer";
+  dep.personnel[key] = (dep.personnel[key] || []).filter((x) => x.id !== id);
   save();
 }
