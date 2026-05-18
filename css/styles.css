@@ -522,6 +522,30 @@ code {
 }
 .tip-row span { color: #aab1c5; }
 
+.info-i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: #c7ccd9;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: help;
+  flex: none;
+  vertical-align: middle;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.info-i:hover { background: #9aa2b6; }
+
 /* Detaljkolonner skjult som standard, synlige ved .gantt--expanded ---------- */
 .gantt .util-cell,
 .gantt .fte-cell,

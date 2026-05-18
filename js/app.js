@@ -41,7 +41,9 @@ import {
   fmtKr,
   fmtNum,
   carMonthly,
-  MONTH_FACTOR
+  MONTH_FACTOR,
+  infoIcon,
+  tipRows
 } from "./utils.js";
 
 const app = document.getElementById("app");
@@ -408,30 +410,70 @@ function renderSummary(dep) {
   const lederFte = (dep.personnel.ledere || []).reduce((s, l) => s + num(l.aarsrverk), 0);
   const koordinatorFte = (dep.personnel.koordinatorer || []).reduce((s, k) => s + num(k.aarsrverk), 0);
   const totalFte = driverFte + lederFte + koordinatorFte;
+  const socialPct = num(p.socialRate);
+  const konsPct = num(mkp.konsernfelles);
+  const marginPct = num(mkp.margin);
+  const mf = MONTH_FACTOR.toFixed(2);
+  const driftsbaseTekst = "bilkostnad + drivstoff + personal + ledelse + koordinator";
   const cards = [
-    ["Biler", `${cars.length}`],
-    ["Bilkostnad", `${fmtKr(carCost)} /mnd`],
-    ["Faste kostnader", `${fmtKr(fixedCost)} /mnd`],
-    ["Drivstoff", `${fmtKr(fuelMonth)} /mnd`],
-    ["Personal (sjåfør)", `${fmtKr(personnelMonth)} /mnd`],
-    ...(lederMonth > 0 ? [["Ledelse", `${fmtKr(lederMonth)} /mnd`]] : []),
-    ...(koordinatorMonth > 0 ? [["Koordinator", `${fmtKr(koordinatorMonth)} /mnd`]] : []),
-    ["Konsernfelles", `${fmtKr(konsernfellesMonth)} /mnd`],
-    ["Margin", `${fmtKr(marginMonth)} /mnd`],
-    ["Totalt årsverk", `${totalFte.toFixed(2)} å.v.`],
-    ["Km pr. uke", `${fmtNum(weekKm)} km`],
-    ["Inntekt pr. uke", fmtKr(weekRevenue)],
-    ["Inntekt pr. virkedag", fmtKr(weekRevenue / 5)],
-    ["Inntekt pr. mnd", fmtKr(monthRevenue)]
+    ["Biler", `${cars.length}`,
+      tipRows([["Teller", "Antall registrerte biler i avdelingen"]])],
+    ["Bilkostnad", `${fmtKr(carCost)} /mnd`,
+      tipRows([
+        ["Per bil", "leasing + forsikring + parkering + service/12 + dekk/12"],
+        ["Totalt", "Sum over alle biler, pr. mnd"]
+      ])],
+    ["Faste kostnader", `${fmtKr(fixedCost)} /mnd`,
+      tipRows([["Inkluderer", "Sum av alle registrerte faste kostnader (kr/mnd)"]])],
+    ["Drivstoff", `${fmtKr(fuelMonth)} /mnd`,
+      tipRows([
+        ["Per kjøring", "km × dager × (forbruk/100) × pris (diesel/strøm)"],
+        ["Til mnd", `Sum × ${mf} (≈ uker pr. mnd)`]
+      ])],
+    ["Personal (sjåfør)", `${fmtKr(personnelMonth)} /mnd`,
+      tipRows([
+        ["Formel", `sjåførtimer/uke × effektiv sats × ${mf}`],
+        ["Effektiv sats", `sjåførsats × (1 + ${socialPct} % sosiale)`],
+        ["Dobbel", "Dobbel bemanning teller 2×"]
+      ])],
+    ...(lederMonth > 0 ? [["Ledelse", `${fmtKr(lederMonth)} /mnd`,
+      tipRows([["Formel", `Σ (årslønn × årsverk / 12 × (1 + ${socialPct} % sosiale))`]])]] : []),
+    ...(koordinatorMonth > 0 ? [["Koordinator", `${fmtKr(koordinatorMonth)} /mnd`,
+      tipRows([["Formel", `Σ (årslønn × årsverk / 12 × (1 + ${socialPct} % sosiale))`]])]] : []),
+    ["Konsernfelles", `${fmtKr(konsernfellesMonth)} /mnd`,
+      tipRows([
+        ["Formel", `driftsbase × ${konsPct} %`],
+        ["Driftsbase", driftsbaseTekst]
+      ])],
+    ["Margin", `${fmtKr(marginMonth)} /mnd`,
+      tipRows([
+        ["Formel", `driftsbase × ${marginPct} %`],
+        ["Driftsbase", driftsbaseTekst]
+      ])],
+    ["Totalt årsverk", `${totalFte.toFixed(2)} å.v.`,
+      tipRows([["Formel", "sjåførtimer/uke / 37,5 + Σ ledelse-årsverk + Σ koordinator-årsverk"]])],
+    ["Km pr. uke", `${fmtNum(weekKm)} km`,
+      tipRows([["Formel", "Σ (km × dager × antall biler) pr. kjøring"]])],
+    ["Inntekt pr. uke", fmtKr(weekRevenue),
+      tipRows([["Formel", "Σ (timer × kr/t × dager × antall biler)"]])],
+    ["Inntekt pr. virkedag", fmtKr(weekRevenue / 5),
+      tipRows([["Formel", "Inntekt pr. uke / 5"]])],
+    ["Inntekt pr. mnd", fmtKr(monthRevenue),
+      tipRows([["Formel", `Inntekt pr. uke × ${mf}`]])]
   ];
+  const resultTip = tipRows([
+    ["Formel", "inntekt/mnd − bilkostnad − faste − drivstoff − personal − ledelse − koordinator − konsernfelles − margin"]
+  ]);
   return `<div class="summary">
     ${cards
       .map(
-        ([a, b]) => `<div class="stat"><span>${a}</span><strong>${b}</strong></div>`
+        ([a, b, tip]) =>
+          `<div class="stat"><span>${a}${tip ? infoIcon(tip) : ""}</span>` +
+          `<strong>${b}</strong></div>`
       )
       .join("")}
     <div class="stat">
-      <span>Resultat pr. mnd</span>
+      <span>Resultat pr. mnd${infoIcon(resultTip)}</span>
       <strong class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</strong>
     </div>
   </div>`;

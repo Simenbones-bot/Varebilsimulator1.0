@@ -65,3 +65,15 @@ export function fmtHours(min) {
   const m = min % 60;
   return m ? `${h} t ${m} min` : `${h} t`;
 }
+
+// Liten "i"-sirkel som viser en forklaring i den eksisterende tooltip-en.
+export function infoIcon(html) {
+  return `<span class="info-i" data-tip="${esc(html)}" aria-label="Forklaring">i</span>`;
+}
+
+// Bygger .tip-row-rader fra [["Ledetekst","Verdi"], ...]
+export function tipRows(rows) {
+  return rows
+    .map(([k, v]) => `<div class="tip-row"><span>${k}</span><strong>${v}</strong></div>`)
+    .join("");
+}

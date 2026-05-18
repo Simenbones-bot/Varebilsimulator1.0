@@ -9,7 +9,9 @@ import {
   fmtKr,
   fmtNum,
   carMonthly,
-  MONTH_FACTOR
+  MONTH_FACTOR,
+  infoIcon,
+  tipRows
 } from "./utils.js";
 
 const TOTAL_MINS = 10080; // 7 × 1440
@@ -187,14 +189,25 @@ function renderWeekHeader() {
     </div>`;
   }).join("");
 
+  const utilTip = tipRows([["Formel", "bookede minutter / (7 × 1440) × 100 %"]]);
+  const fteTip = tipRows([["Formel", "bilens timer/uke (inkl. dobbel-faktor) / 37,5"]]);
+  const costTip = tipRows([
+    ["Formel", "(sjåfør + bil + drivstoff /mnd) / bookede timer /mnd"],
+    ["Påslag", "× (1 + konsernfelles % + margin %)"]
+  ]);
+  const incomeTip = tipRows([["Formel", "bilens inntekt/uke / bilens bookede timer/uke"]]);
+  const resultTip = tipRows([
+    ["Formel", `(inntekt/mnd − driftskost/mnd inkl. påslag) / ${MONTH_FACTOR.toFixed(2)} / 5`]
+  ]);
+
   return `<div class="gantt-row gantt-headrow">
     <div class="car-label"></div>
     <div class="gantt-weekheader">${cells}</div>
-    <div class="util-cell util-head">Utnyttelse</div>
-    <div class="fte-cell fte-head">Å.verk</div>
-    <div class="cost-cell cost-head">Drift/time</div>
-    <div class="income-cell income-head">Inntekt/time</div>
-    <div class="result-cell result-head">Resultat /dag</div>
+    <div class="util-cell util-head"><span>Utnyttelse</span>${infoIcon(utilTip)}</div>
+    <div class="fte-cell fte-head"><span>Å.verk</span>${infoIcon(fteTip)}</div>
+    <div class="cost-cell cost-head"><span>Drift/time</span>${infoIcon(costTip)}</div>
+    <div class="income-cell income-head"><span>Inntekt/time</span>${infoIcon(incomeTip)}</div>
+    <div class="result-cell result-head"><span>Resultat /dag</span>${infoIcon(resultTip)}</div>
   </div>`;
 }
 
