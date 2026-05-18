@@ -350,13 +350,10 @@ function renderSummary(dep) {
   const p = dep.personnel || { driverRate: 250, socialRate: 36 };
   const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
   const carCost = cars.reduce((s, c) => s + carMonthly(c), 0);
-  const fixedCostBase = (dep.fixedCosts || []).reduce(
+  const fixedCost = (dep.fixedCosts || []).reduce(
     (s, f) => s + num(f.amount),
     0
   );
-  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
-  const fixedCost =
-    fixedCostBase * (1 + num(mkp.konsernfelles) / 100 + num(mkp.margin) / 100);
   let weekKm = 0;
   let weekRevenue = 0;
   let fuelWeek = 0;
@@ -383,13 +380,21 @@ function renderSummary(dep) {
   const fuelMonth = fuelWeek * MONTH_FACTOR;
   const personnelMonth = weekDriverHours * effectiveRate * MONTH_FACTOR;
   const monthRevenue = weekRevenue * MONTH_FACTOR;
-  const result = monthRevenue - carCost - fixedCost - fuelMonth - personnelMonth;
+  const driftsbase = carCost + fuelMonth + personnelMonth;
+  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
+  const konsernfellesMonth = driftsbase * (num(mkp.konsernfelles) / 100);
+  const marginMonth = driftsbase * (num(mkp.margin) / 100);
+  const result =
+    monthRevenue - carCost - fixedCost - fuelMonth - personnelMonth -
+    konsernfellesMonth - marginMonth;
   const cards = [
     ["Biler", `${cars.length}`],
     ["Bilkostnad", `${fmtKr(carCost)} /mnd`],
     ["Faste kostnader", `${fmtKr(fixedCost)} /mnd`],
     ["Drivstoff", `${fmtKr(fuelMonth)} /mnd`],
     ["Personal", `${fmtKr(personnelMonth)} /mnd`],
+    ["Konsernfelles", `${fmtKr(konsernfellesMonth)} /mnd`],
+    ["Margin", `${fmtKr(marginMonth)} /mnd`],
     ["Km pr. uke", `${fmtNum(weekKm)} km`],
     ["Inntekt pr. uke", fmtKr(weekRevenue)],
     ["Inntekt pr. virkedag", fmtKr(weekRevenue / 5)],
@@ -412,16 +417,10 @@ function renderSummary(dep) {
 function renderFixedCosts(el, dep) {
   const items = dep.fixedCosts || [];
   const sum = items.reduce((s, f) => s + num(f.amount), 0);
-  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
-  const konsAmt = sum * (num(mkp.konsernfelles) / 100);
-  const marginAmt = sum * (num(mkp.margin) / 100);
   el.innerHTML = `
     <div class="section-head">
       <h2>Faste kostnader – ${esc(dep.name)}</h2>
-      <div class="btn-group">
-        <button class="btn small ghost" data-action="edit-markups">Rediger påslag</button>
-        <button class="btn primary" data-action="add-fixed">+ Ny kostnad</button>
-      </div>
+      <button class="btn primary" data-action="add-fixed">+ Ny kostnad</button>
     </div>
     ${
       items.length
@@ -452,22 +451,7 @@ function renderFixedCosts(el, dep) {
             </tr></tfoot>
           </table>`
         : `<div class="card empty"><p>Ingen faste kostnader registrert.</p></div>`
-    }
-    <div class="summary" style="margin-top:1rem">
-      <div class="stat"><span>Sum poster</span><strong>${fmtKr(sum)} /mnd</strong></div>
-      <div class="stat">
-        <span>Konsernfelles (${num(mkp.konsernfelles)} %)</span>
-        <strong>+ ${fmtKr(konsAmt)} /mnd</strong>
-      </div>
-      <div class="stat">
-        <span>Margin (${num(mkp.margin)} %)</span>
-        <strong>+ ${fmtKr(marginAmt)} /mnd</strong>
-      </div>
-      <div class="stat">
-        <span>Totalt med påslag</span>
-        <strong>${fmtKr(sum + konsAmt + marginAmt)} /mnd</strong>
-      </div>
-    </div>`;
+    }`;
 }
 
 // ---- Drivstoff -------------------------------------------------------------
@@ -517,6 +501,7 @@ function renderFuel(el, dep) {
 function renderPersonnel(el, dep) {
   const p = dep.personnel || { driverRate: 250, socialRate: 36 };
   const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
+  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
   el.innerHTML = `
     <div class="section-head">
       <h2>Personal – ${esc(dep.name)}</h2>
@@ -530,6 +515,19 @@ function renderPersonnel(el, dep) {
     <div class="card" style="margin-top:1rem;font-size:.9rem;color:var(--muted)">
       Effektiv timesats = sjåfør × (1 + sosiale kostnader %).<br>
       Personalkostnad pr. måned beregnes automatisk fra alle kjøringer og vises i oppsummeringen.
+    </div>
+    <div class="section-head sub" style="margin-top:1.5rem">
+      <h3>Påslag på drift</h3>
+      <button class="btn small ghost" data-action="edit-markups">Rediger</button>
+    </div>
+    <div class="summary">
+      <div class="stat"><span>Konsernfelles</span><strong>${num(mkp.konsernfelles)} %</strong></div>
+      <div class="stat"><span>Margin</span><strong>${num(mkp.margin)} %</strong></div>
+      <div class="stat"><span>Totalt påslag</span>
+        <strong>${num(mkp.konsernfelles) + num(mkp.margin)} %</strong></div>
+    </div>
+    <div class="card" style="margin-top:1rem;font-size:.9rem;color:var(--muted)">
+      Påslaget legges på drift/time-satsen og driftskostnader pr. måned.
     </div>`;
 }
 

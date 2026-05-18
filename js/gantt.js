@@ -48,7 +48,11 @@ function carCostPerHour(car, trips, dep) {
   const monthHours = hoursWeek * MONTH_FACTOR;
   const opCostMonth =
     driverWeek * MONTH_FACTOR + carMonthly(car) + fuelWeek * MONTH_FACTOR;
-  const costPerHour = opCostMonth / monthHours;
+  const baseCostPerHour = opCostMonth / monthHours;
+  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
+  const markupFactor =
+    1 + (Number(mkp.konsernfelles) || 0) / 100 + (Number(mkp.margin) || 0) / 100;
+  const costPerHour = baseCostPerHour * markupFactor;
   const incomePerHour = revenueWeek / hoursWeek;
   return { costPerHour, incomePerHour, loss: costPerHour > incomePerHour };
 }
