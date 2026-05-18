@@ -56,7 +56,7 @@ function carCostPerHour(car, trips, dep) {
   const incomePerHour = revenueWeek / hoursWeek;
   const monthlyIncome = revenueWeek * MONTH_FACTOR;
   const monthlyCost = opCostMonth * markupFactor;
-  const result = monthlyIncome - monthlyCost;
+  const result = (monthlyIncome - monthlyCost) / MONTH_FACTOR / 5;
   return { costPerHour, incomePerHour, loss: costPerHour > incomePerHour, result };
 }
 
@@ -194,7 +194,7 @@ function renderWeekHeader() {
     <div class="fte-cell fte-head">Å.verk</div>
     <div class="cost-cell cost-head">Drift/time</div>
     <div class="income-cell income-head">Inntekt/time</div>
-    <div class="result-cell result-head">Resultat /mnd</div>
+    <div class="result-cell result-head">Resultat /dag</div>
   </div>`;
 }
 
