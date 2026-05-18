@@ -77,3 +77,67 @@ export function tipRows(rows) {
     .map(([k, v]) => `<div class="tip-row"><span>${k}</span><strong>${v}</strong></div>`)
     .join("");
 }
+
+export const MONTHS_LONG = [
+  "Januar", "Februar", "Mars", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Desember"
+];
+
+// Påskesøndag (Gauss/anonym gregoriansk algoritme).
+function easterSunday(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+// Norske helligdager (kun de som kan falle på en virkedag tas med i tellingen).
+export function norwegianHolidays(year) {
+  const e = easterSunday(year);
+  const off = (n) => {
+    const x = new Date(e);
+    x.setDate(x.getDate() + n);
+    return x;
+  };
+  return [
+    new Date(year, 0, 1),    // Nyttårsdag
+    off(-3),                 // Skjærtorsdag
+    off(-2),                 // Langfredag
+    off(1),                  // 2. påskedag
+    new Date(year, 4, 1),    // 1. mai
+    new Date(year, 4, 17),   // Grunnlovsdag
+    off(39),                 // Kristi himmelfartsdag
+    off(50),                 // 2. pinsedag
+    new Date(year, 11, 25),  // 1. juledag
+    new Date(year, 11, 26)   // 2. juledag
+  ];
+}
+
+// Antall virkedager (man–fre minus helligdager) i en gitt måned (0–11).
+export function workingDaysInMonth(year, month, holidays) {
+  const holiDays = new Set(
+    holidays
+      .filter((h) => h.getFullYear() === year && h.getMonth() === month)
+      .map((h) => h.getDate())
+  );
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let count = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dow = new Date(year, month, day).getDay();
+    if (dow === 0 || dow === 6) continue;
+    if (holiDays.has(day)) continue;
+    count++;
+  }
+  return count;
+}

@@ -43,7 +43,10 @@ import {
   carMonthly,
   MONTH_FACTOR,
   infoIcon,
-  tipRows
+  tipRows,
+  MONTHS_LONG,
+  norwegianHolidays,
+  workingDaysInMonth
 } from "./utils.js";
 
 const app = document.getElementById("app");
@@ -66,7 +69,7 @@ let view = "kjøringer";
 let ganttExpanded = false;
 let tripsCollapsed = false;
 let summaryExpanded = false;
-let selectedCarId = null;
+let selectedCarId = "__dep__";
 
 // ---- Oppstart --------------------------------------------------------------
 (async function init() {
@@ -292,6 +295,7 @@ function renderKjoringer(el, dep) {
     <div class="section-head">
       <h2>Ukesplan – ${esc(dep.name)}</h2>
       <div class="btn-group">
+        <button class="btn small ghost" data-action="simulate-year">Simuler år</button>
         <button class="btn small ghost" data-action="toggle-gantt">${
           ganttExpanded ? "⊖ Enkel visning" : "⊕ Detaljer"
         }</button>
@@ -476,17 +480,13 @@ function renderSummary(dep) {
   const statCard = ([a, b, tip]) =>
     `<div class="stat"><span>${a}${tip ? infoIcon(tip) : ""}</span><strong>${b}</strong></div>`;
 
-  // Funnel — totalt eller per valgt bil
-  let fRevMonth    = monthRevenue;
-  let fLonnCut     = personnelMonth + lederMonth + koordinatorMonth;
-  let fLonnLabel   = "Lønn";
-  let fFasteCut    = carCost + fixedCost + fuelMonth;
-  let fFasteLabel  = "Bil + faste + drivstoff";
-  let fKonsCut     = konsernfellesMonth;
-  let fMarginCut   = marginMonth;
-  let fResult      = result;
+  // Funnel — hele avdelingen, alle biler samlet, eller én valgt bil
+  let fRevMonth, fLonnCut, fLonnLabel, fFasteCut, fFasteLabel, fKonsCut, fMarginCut, fResult;
+  const selCar =
+    selectedCarId && selectedCarId !== "__dep__" && selectedCarId !== "__all__"
+      ? cars.find((c) => c.id === selectedCarId)
+      : null;
 
-  const selCar = selectedCarId ? cars.find((c) => c.id === selectedCarId) : null;
   if (selCar) {
     const carTrips = (dep.trips || []).filter((t) => tripCarIds(t).includes(selCar.id));
     let carRevWeek = 0, carDriverHoursWeek = 0, carFuelWeek = 0;
@@ -508,6 +508,27 @@ function renderSummary(dep) {
     fKonsCut    = carDriftsbase * (num(mkp.konsernfelles) / 100);
     fMarginCut  = carDriftsbase * (num(mkp.margin) / 100);
     fResult     = fRevMonth - fLonnCut - fFasteCut - fKonsCut - fMarginCut;
+  } else if (selectedCarId === "__all__") {
+    // Alle biler samlet – kun driftskostnader, uten avdelingsoverhead
+    const allDriftsbase = personnelMonth + carCost + fuelMonth;
+    fRevMonth   = monthRevenue;
+    fLonnCut    = personnelMonth;
+    fLonnLabel  = "Lønn (sjåfør)";
+    fFasteCut   = carCost + fuelMonth;
+    fFasteLabel = "Bil + drivstoff";
+    fKonsCut    = allDriftsbase * (num(mkp.konsernfelles) / 100);
+    fMarginCut  = allDriftsbase * (num(mkp.margin) / 100);
+    fResult     = fRevMonth - fLonnCut - fFasteCut - fKonsCut - fMarginCut;
+  } else {
+    // Hele avdelingen – inkl. ledelse, koordinator og faste kostnader
+    fRevMonth   = monthRevenue;
+    fLonnCut    = personnelMonth + lederMonth + koordinatorMonth;
+    fLonnLabel  = "Lønn";
+    fFasteCut   = carCost + fixedCost + fuelMonth;
+    fFasteLabel = "Bil + faste + drivstoff";
+    fKonsCut    = konsernfellesMonth;
+    fMarginCut  = marginMonth;
+    fResult     = result;
   }
 
   const afterLonn  = fRevMonth - fLonnCut;
@@ -538,12 +559,11 @@ function renderSummary(dep) {
       </div>`;
   }).join("");
 
-  const carTabs = cars.length > 1
-    ? `<div class="funnel-car-tabs">
-        <button class="funnel-car-tab${!selectedCarId ? " active" : ""}" data-action="select-funnel-car" data-car-id="">Alle</button>
-        ${cars.map((c) => `<button class="funnel-car-tab${selectedCarId === c.id ? " active" : ""}" data-action="select-funnel-car" data-car-id="${esc(c.id)}">${esc(c.regNr || "—")}</button>`).join("")}
-      </div>`
-    : "";
+  const carTabs = `<div class="funnel-car-tabs">
+      <button class="funnel-car-tab${selectedCarId === "__dep__" ? " active" : ""}" data-action="select-funnel-car" data-car-id="__dep__">Hele avdelingen</button>
+      <button class="funnel-car-tab${selectedCarId === "__all__" ? " active" : ""}" data-action="select-funnel-car" data-car-id="__all__">Alle biler</button>
+      ${cars.map((c) => `<button class="funnel-car-tab${selectedCarId === c.id ? " active" : ""}" data-action="select-funnel-car" data-car-id="${esc(c.id)}">${esc(c.regNr || "—")}</button>`).join("")}
+    </div>`;
 
   const funnelSection = monthRevenue > 0
     ? `<div class="card funnel-card">${carTabs}<div class="funnel">${funnelHtml}</div></div>`
@@ -574,6 +594,143 @@ function renderSummary(dep) {
     ${summaryExpanded
       ? `<div class="summary">${detailCards.map(statCard).join("")}</div>`
       : ""}`;
+}
+
+// ---- Årssimulering ---------------------------------------------------------
+function depWeeklyFinancials(dep) {
+  const cars = dep.cars || [];
+  const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
+  const p = dep.personnel || { driverRate: 250, socialRate: 36 };
+  const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
+  const socialFactor = 1 + num(p.socialRate) / 100;
+  const carCostMonth = cars.reduce((s, c) => s + carMonthly(c), 0);
+  const fixedCostMonth = (dep.fixedCosts || []).reduce((s, f) => s + num(f.amount), 0);
+  let weekRevenue = 0, fuelWeek = 0, weekDriverHours = 0;
+  (dep.trips || []).forEach((t) => {
+    const occ = (t.days || []).length;
+    const hours = durationMinutes(t.startTime, t.endTime) / 60;
+    const assigned = tripCarIds(t)
+      .map((id) => cars.find((c) => c.id === id))
+      .filter(Boolean);
+    const m = Math.max(assigned.length, 1);
+    const staffMult = t.staffing === "dobbel" ? 2 : 1;
+    weekRevenue += hours * num(t.revenuePerHour) * occ * m;
+    weekDriverHours += hours * occ * m * staffMult;
+    assigned.forEach((c) => {
+      const price =
+        c.fuelType === "el" ? num(fuel.electricityPrice) : num(fuel.dieselPrice);
+      fuelWeek += num(t.km) * occ * (num(c.consumption) / 100) * price;
+    });
+  });
+  const lederMonth = (dep.personnel?.ledere || []).reduce(
+    (s, l) => s + (num(l.aarslonn) * num(l.aarsrverk)) / 12 * socialFactor, 0);
+  const koordinatorMonth = (dep.personnel?.koordinatorer || []).reduce(
+    (s, k) => s + (num(k.aarslonn) * num(k.aarsrverk)) / 12 * socialFactor, 0);
+  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
+  return {
+    weekRevenue, fuelWeek, weekDriverHours, effectiveRate,
+    carCostMonth, fixedCostMonth, lederMonth, koordinatorMonth,
+    konsPct: num(mkp.konsernfelles), marginPct: num(mkp.margin)
+  };
+}
+
+function yearReportData(fin, year) {
+  const holidays = norwegianHolidays(year);
+  const rows = [];
+  const sum = { wd: 0, k3: 0, k4: 0, k5: 0, k6: 0, k7: 0, paslag: 0, res: 0 };
+  for (let mo = 0; mo < 12; mo++) {
+    const wd = workingDaysInMonth(year, mo, holidays);
+    const factor = wd / 5;
+    const inntekt = fin.weekRevenue * factor;
+    const drivstoff = fin.fuelWeek * factor;
+    const lonnSjafor = fin.weekDriverHours * fin.effectiveRate * factor;
+    const k3 = inntekt;
+    const k4 = fin.carCostMonth + drivstoff;
+    const k5 = lonnSjafor + fin.lederMonth + fin.koordinatorMonth;
+    const k6 = fin.fixedCostMonth;
+    const driftsbase =
+      fin.carCostMonth + drivstoff + lonnSjafor + fin.lederMonth + fin.koordinatorMonth;
+    const k7 = driftsbase * (fin.konsPct / 100);
+    const paslag = driftsbase * (fin.marginPct / 100);
+    const res = k3 - k4 - k5 - k6 - k7 - paslag;
+    rows.push({ mo, wd, k3, k4, k5, k6, k7, paslag, res });
+    sum.wd += wd; sum.k3 += k3; sum.k4 += k4; sum.k5 += k5;
+    sum.k6 += k6; sum.k7 += k7; sum.paslag += paslag; sum.res += res;
+  }
+  return { rows, sum };
+}
+
+function renderYearReport(dep, year) {
+  const fin = depWeeklyFinancials(dep);
+  const { rows, sum } = yearReportData(fin, year);
+  const c = (v) => `<td class="num">${fmtKr(v)}</td>`;
+  const body = rows
+    .map(
+      (r) => `<tr>
+        <td>${MONTHS_LONG[r.mo]}</td>
+        <td class="num">${r.wd}</td>
+        ${c(r.k3)}${c(r.k4)}${c(r.k5)}${c(r.k6)}${c(r.k7)}${c(r.paslag)}
+        <td class="num ${r.res >= 0 ? "pos" : "neg"}">${fmtKr(r.res)}</td>
+      </tr>`
+    )
+    .join("");
+  const s = (v) => `<td class="num"><strong>${fmtKr(v)}</strong></td>`;
+  return `<table class="list report-table">
+    <thead><tr>
+      <th>Måned</th><th class="num">Virkedager</th>
+      <th class="num">K3 Inntekter</th>
+      <th class="num">K4 Bil &amp; materiell</th>
+      <th class="num">K5 Lønn</th>
+      <th class="num">K6 Annet</th>
+      <th class="num">K7 Konsernfelles</th>
+      <th class="num">Påslag</th>
+      <th class="num">Resultat</th>
+    </tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr>
+      <td><strong>Sum ${year}</strong></td>
+      <td class="num"><strong>${sum.wd}</strong></td>
+      ${s(sum.k3)}${s(sum.k4)}${s(sum.k5)}${s(sum.k6)}${s(sum.k7)}${s(sum.paslag)}
+      <td class="num ${sum.res >= 0 ? "pos" : "neg"}"><strong>${fmtKr(sum.res)}</strong></td>
+    </tr></tfoot>
+  </table>`;
+}
+
+function openYearSimulation(dep) {
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  const thisYear = new Date().getFullYear();
+  const years = [];
+  for (let y = thisYear; y <= thisYear + 3; y++) years.push(y);
+  overlay.innerHTML = `
+    <div class="card modal report-modal">
+      <div class="report-head">
+        <h2>Årssimulering – ${esc(dep.name)}</h2>
+        <label class="report-year">År
+          <select data-x="year">
+            ${years.map((y) => `<option value="${y}">${y}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <p class="muted report-note">
+        Basert på antall virkedager (man–fre minus norske helligdager) pr. måned.
+        Faste poster (bil, faste kostnader, ledelse, koordinator) er like hver
+        måned; inntekt, sjåførlønn og drivstoff skaleres med virkedager.
+      </p>
+      <div class="modal-body" data-x="body">${renderYearReport(dep, years[0])}</div>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" data-x="close">Lukk</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const sel = overlay.querySelector('[data-x="year"]');
+  const bodyEl = overlay.querySelector('[data-x="body"]');
+  sel.addEventListener("change", () => {
+    bodyEl.innerHTML = renderYearReport(dep, Number(sel.value));
+  });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay || e.target.dataset.x === "close") overlay.remove();
+  });
 }
 
 // ---- Faste kostnader -------------------------------------------------------
@@ -880,8 +1037,10 @@ app.addEventListener("click", async (e) => {
       deleteTrip(dep, t.dataset.id);
       renderContent();
     }
+  } else if (action === "simulate-year" && dep) {
+    openYearSimulation(dep);
   } else if (action === "select-funnel-car") {
-    selectedCarId = t.dataset.carId || null;
+    selectedCarId = t.dataset.carId || "__dep__";
     renderContent();
   } else if (action === "toggle-summary") {
     summaryExpanded = !summaryExpanded;

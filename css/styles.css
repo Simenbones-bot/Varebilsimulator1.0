@@ -571,6 +571,35 @@ code {
   border-top: 1px solid var(--border);
 }
 
+/* Årssimulering ------------------------------------------------------------ */
+.report-modal { max-width: 1000px; }
+.report-modal .modal-body { overflow-x: auto; }
+.report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.report-year {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .85rem;
+  color: var(--muted);
+  margin: 0;
+}
+.report-year select { width: auto; margin: 0; }
+.report-note { font-size: .8rem; margin: .25rem 0 .75rem; }
+.report-table { font-size: .82rem; }
+.report-table th,
+.report-table td { padding: .45rem .6rem; white-space: nowrap; }
+.report-table .num { text-align: right; }
+.report-table tfoot td {
+  border-top: 2px solid var(--border);
+  background: #fafbfe;
+}
+
 /* Tooltip ------------------------------------------------------------------ */
 .tooltip {
   position: fixed;
