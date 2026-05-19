@@ -417,7 +417,7 @@ function renderSummary(dep) {
     });
   });
   const fuelMonth = fuelWeek * MONTH_FACTOR;
-  const personnelMonth = weekDriverHours * effectiveRate * MONTH_FACTOR;
+  const personnelMonth = weekDriverHours * effectiveRate * (52 / 12);
   const monthRevenue = weekRevenue * MONTH_FACTOR;
   const socialFactor = 1 + num(p.socialRate) / 100;
   const lederMonth = (dep.personnel.ledere || []).reduce(
@@ -468,7 +468,8 @@ function renderSummary(dep) {
       ])],
     ["Personal (sjåfør)", `${fmtKr(personnelMonth)} /mnd`,
       tipRows([
-        ["Formel", `sjåførtimer/uke × effektiv sats × ${mf}`],
+        ["Formel", "sjåførtimer/uke × effektiv sats × 52/12"],
+        ["Grunnlag", "1 950 t/år (37,5 t/uke × 52 uker) → 163 t/mnd pr. FTE"],
         ["Effektiv sats", `sjåførsats × (1 + ${socialPct} % sosiale)`],
         ["Dobbel", "Dobbel bemanning teller 2×"]
       ])],
@@ -519,7 +520,7 @@ function renderSummary(dep) {
       carFuelWeek        += num(t.km) * occ * (num(selCar.consumption) / 100) * price;
     });
     fRevMonth   = carRevWeek * MONTH_FACTOR;
-    fLonnCut    = carDriverHoursWeek * effectiveRate * MONTH_FACTOR;
+    fLonnCut    = carDriverHoursWeek * effectiveRate * (52 / 12);
     fLonnLabel  = "Lønn (sjåfør)";
     fFasteCut   = carMonthly(selCar) + carFuelWeek * MONTH_FACTOR;
     fFasteLabel = "Bil + drivstoff";
@@ -684,7 +685,7 @@ function yearReportData(fin, year) {
     const factor = wd / 5;
     const inntekt = fin.weekRevenue * factor;
     const drivstoff = fin.fuelWeek * factor;
-    const lonnSjafor = fin.weekDriverHours * fin.effectiveRate * factor;
+    const lonnSjafor = fin.weekDriverHours * fin.effectiveRate * (52 / 12);
     const k3 = inntekt;
     const k4 = fin.carCostMonth + drivstoff;
     const k5 = lonnSjafor + fin.lederMonth + fin.koordinatorMonth;
@@ -756,7 +757,7 @@ function openYearSimulation(dep) {
       <p class="muted report-note">
         Basert på antall virkedager (man–fre minus norske helligdager) pr. måned.
         Faste poster (bil, faste kostnader, ledelse, koordinator) er like hver
-        måned; inntekt, sjåførlønn og drivstoff skaleres med virkedager.
+        måned inkl. sjåfør-lønn (52 uker/år); inntekt og drivstoff skaleres med virkedager.
       </p>
       <div class="modal-body" data-x="body">${renderYearReport(dep, years[0])}</div>
       <div class="modal-foot">
