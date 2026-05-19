@@ -226,18 +226,27 @@ export function renderGantt(dep, expanded = false) {
   }
 
   let totalUtil = 0;
+  let totalFte = 0, fteCount = 0;
+  let totalCost = 0, totalIncome = 0, totalResult = 0, ocCount = 0;
   const carRows = cars
     .map((car) => {
       const carTrips = trips.filter((t) => tripCarIds(t).includes(car.id));
       const util = carUtilization(car, trips);
       totalUtil += parseFloat(util);
       const oc = carCostPerHour(car, trips, dep);
+      if (oc) {
+        totalCost   += oc.costPerHour;
+        totalIncome += oc.incomePerHour;
+        totalResult += oc.result;
+        ocCount++;
+      }
       const carFteWeekly = carTrips.reduce((s, t) => {
         const h = durationMinutes(t.startTime, t.endTime) / 60;
         const staffMult = t.staffing === "dobbel" ? 2 : 1;
         return s + h * (t.days || []).length * staffMult;
       }, 0);
       const carFte = carFteWeekly / 37.5;
+      if (carFte > 0) { totalFte += carFte; fteCount++; }
       const totalMonthHours =
         carTrips.reduce(
           (s, t) =>
@@ -286,16 +295,23 @@ export function renderGantt(dep, expanded = false) {
         </div>`
       : "";
 
-  const avgUtil = cars.length > 0 ? (totalUtil / cars.length).toFixed(1) : "0.0";
+  const avgUtil   = cars.length > 0 ? (totalUtil / cars.length).toFixed(1) : "0.0";
+  const avgFte    = fteCount > 0  ? (totalFte   / fteCount).toFixed(2)   : null;
+  const avgCost   = ocCount > 0   ? totalCost   / ocCount                : null;
+  const avgIncome = ocCount > 0   ? totalIncome / ocCount                : null;
+  const avgResult = ocCount > 0   ? totalResult / ocCount                : null;
+
   const summaryRow = expanded && cars.length > 0
     ? `<div class="gantt-row gantt-summary">
         <div class="car-label"><span class="car-regnr">Snitt</span></div>
         <div class="gantt-track"></div>
         <div class="util-cell"><strong>${avgUtil} %</strong></div>
-        <div class="fte-cell">–</div>
-        <div class="cost-cell">–</div>
-        <div class="income-cell">–</div>
-        <div class="result-cell">–</div>
+        <div class="fte-cell">${avgFte !== null ? `<strong>${avgFte}</strong>` : "–"}</div>
+        <div class="cost-cell">${avgCost !== null ? `<strong>${fmtKr(avgCost)}</strong>` : "–"}</div>
+        <div class="income-cell">${avgIncome !== null ? `<strong>${fmtKr(avgIncome)}</strong>` : "–"}</div>
+        <div class="result-cell ${avgResult !== null ? (avgResult >= 0 ? "pos" : "neg") : ""}">
+          ${avgResult !== null ? `<strong>${fmtKr(avgResult)}</strong>` : "–"}
+        </div>
       </div>`
     : "";
 
