@@ -319,7 +319,7 @@ function renderKjoringer(el, dep) {
         ? `<table class="list">
             <thead><tr>
               <th>Kunde</th><th>Type</th><th>Bemanning</th><th>Bil</th>
-              <th>Tid</th><th>Dager</th><th>Km</th><th>Kr/t</th><th>Kategori</th><th></th>
+              <th>Tid</th><th>Dager</th><th>Km</th><th>Kr/t</th><th>Kategori</th><th>Ruter</th><th></th>
             </tr></thead>
             <tbody>${trips.map((t) => tripRow(t, dep)).join("")}</tbody>
           </table>`
@@ -335,6 +335,20 @@ function tripRow(t, dep) {
     .map((c) => esc(c.regNr));
   const carLabel = regs.length ? regs.join(", ") : "–";
   const vehicleLabel = VEHICLE_TYPES.find((v) => v.value === t.vehicleType && v.value)?.label || "–";
+  const needed = num(t.antallRuter);
+  const assigned = tripCarIds(t).filter((id) => cars.find((c) => c.id === id)).length;
+  let ruterCell;
+  if (!needed) {
+    ruterCell = `<td class="ruter-cell">–</td>`;
+  } else {
+    const cls = assigned < needed ? "ruter-low" : assigned > needed ? "ruter-high" : "ruter-ok";
+    const title = assigned < needed
+      ? `Mangler ${needed - assigned} bil${needed - assigned > 1 ? "er" : ""}`
+      : assigned > needed
+        ? `${assigned - needed} bil${assigned - needed > 1 ? "er" : " bil"} for mange`
+        : "Riktig antall biler";
+    ruterCell = `<td class="ruter-cell"><span class="ruter-badge ${cls}" title="${esc(title)}">${assigned}/${needed}</span></td>`;
+  }
   return `<tr>
     <td>${esc(t.customer || "(uten navn)")}</td>
     <td><span class="pill type-${esc(t.type || "annet")}"${
@@ -353,6 +367,7 @@ function tripRow(t, dep) {
     <td>${fmtNum(t.km)}</td>
     <td>${fmtNum(t.revenuePerHour)}</td>
     <td>${esc(vehicleLabel)}</td>
+    ${ruterCell}
     <td class="row-actions">
       <button class="btn small" data-action="edit-trip" data-id="${esc(
         t.id
@@ -1392,7 +1407,8 @@ function tripModal(trip, dep) {
         trip?.color ||
         TRIP_COLORS[(dep?.trips?.length || 0) % TRIP_COLORS.length]
     },
-    { name: "carIds", label: "Biler", type: "multi", value: tripCarIds(trip || {}), options: carOptions },
+    { name: "antallRuter", label: "Antall ruter (biler som trengs)", type: "number", value: trip?.antallRuter },
+    { name: "carIds", label: "Biler (tildelt)", type: "multi", value: tripCarIds(trip || {}), options: carOptions },
     { name: "startTime", label: "Starttidspunkt", type: "time", required: true, value: trip?.startTime || "08:00" },
     { name: "endTime", label: "Sluttidspunkt", type: "time", required: true, value: trip?.endTime || "16:00" },
     { name: "days", label: "Faste dager", type: "days", value: trip?.days || [] },

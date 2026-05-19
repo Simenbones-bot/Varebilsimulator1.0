@@ -501,6 +501,20 @@ code {
 }
 .list tr:last-child td { border-bottom: none; }
 .row-actions { display: flex; gap: .35rem; }
+.ruter-cell { text-align: center; }
+.ruter-badge {
+  display: inline-block;
+  font-size: .75rem;
+  font-weight: 700;
+  padding: .18rem .55rem;
+  border-radius: 999px;
+  color: #fff;
+  cursor: default;
+  white-space: nowrap;
+}
+.ruter-low  { background: var(--danger); }
+.ruter-ok   { background: var(--ok); }
+.ruter-high { background: #e6a817; }
 .pill {
   font-size: .72rem;
   color: #fff;
