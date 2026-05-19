@@ -297,9 +297,6 @@ function renderKjoringer(el, dep) {
       <h2>Rutemaster – ${esc(dep.name)}</h2>
       <div class="btn-group">
         <button class="btn small ghost" data-action="simulate-year">Simuler år</button>
-        <button class="btn small ghost" data-action="toggle-gantt">${
-          ganttExpanded ? "⊖ Enkel visning" : "⊕ Detaljer"
-        }</button>
         <button class="btn small ghost" data-action="trip-template">Mal ↓</button>
         <button class="btn small ghost" data-action="import-trips">Importer CSV</button>
         <button class="btn small ghost" data-action="export-trips">Eksporter CSV</button>
@@ -309,6 +306,9 @@ function renderKjoringer(el, dep) {
     ${renderSummary(dep)}
     <div class="section-head sub" style="margin-top:.75rem;margin-bottom:.25rem">
       <h3>Bil gantt</h3>
+      <button class="btn small ghost" data-action="toggle-gantt">
+        ${ganttExpanded ? "⊖ Enkel visning" : "⊕ Detaljer"}
+      </button>
     </div>
     ${renderGantt(dep, ganttExpanded)}
     <div class="section-head sub">

@@ -225,10 +225,12 @@ export function renderGantt(dep, expanded = false) {
     </div>`;
   }
 
+  let totalUtil = 0;
   const carRows = cars
     .map((car) => {
       const carTrips = trips.filter((t) => tripCarIds(t).includes(car.id));
       const util = carUtilization(car, trips);
+      totalUtil += parseFloat(util);
       const oc = carCostPerHour(car, trips, dep);
       const carFteWeekly = carTrips.reduce((s, t) => {
         const h = durationMinutes(t.startTime, t.endTime) / 60;
@@ -284,9 +286,23 @@ export function renderGantt(dep, expanded = false) {
         </div>`
       : "";
 
+  const avgUtil = cars.length > 0 ? (totalUtil / cars.length).toFixed(1) : "0.0";
+  const summaryRow = expanded && cars.length > 0
+    ? `<div class="gantt-row gantt-summary">
+        <div class="car-label"><span class="car-regnr">Snitt</span></div>
+        <div class="gantt-track"></div>
+        <div class="util-cell"><strong>${avgUtil} %</strong></div>
+        <div class="fte-cell">–</div>
+        <div class="cost-cell">–</div>
+        <div class="income-cell">–</div>
+        <div class="result-cell">–</div>
+      </div>`
+    : "";
+
   return `<div class="gantt${expanded ? " gantt--expanded" : ""}">
     ${renderWeekHeader()}
     ${carRows}
     ${unassignedRow}
+    ${summaryRow}
   </div>`;
 }

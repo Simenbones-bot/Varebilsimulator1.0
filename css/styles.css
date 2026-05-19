@@ -445,6 +445,11 @@ code {
 .gantt-unassigned {
   border-top: 1px dashed #d4cff0;
 }
+.gantt-summary {
+  border-top: 2px solid var(--border);
+  background: #fafbfe;
+}
+.gantt-summary .car-label { background: #fafbfe; }
 
 /* Trip-blokker */
 .trip-block {
