@@ -263,61 +263,68 @@ code {
 .pos { color: var(--ok); }
 .neg { color: var(--danger); }
 
-/* Kostnadsflyt-funnel -------------------------------------------------------- */
+/* Kostnadsflyt – waterfall --------------------------------------------------- */
 .funnel-card { padding: 1rem 1.25rem 1.25rem; margin-bottom: .5rem; }
-.funnel {
+.wf-head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .5rem;
+}
+.wf-head h3 { margin: 0; font-size: 1rem; }
+.wf {
   display: flex;
   align-items: flex-end;
   gap: .5rem;
-  padding-top: .25rem;
+  padding-top: 1.5rem;
 }
-.funnel-col {
+.wf-zero {
+  position: absolute;
+  left: -.25rem;
+  right: -.25rem;
+  border-top: 1px dashed var(--muted);
+  z-index: 0;
+}
+.wf-col {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-.funnel-amount {
-  font-size: .82rem;
+.wf-val {
+  font-size: .78rem;
   font-weight: 700;
-  margin-bottom: .35rem;
+  margin-bottom: .3rem;
   white-space: nowrap;
   color: var(--text);
 }
-.funnel-amount.pos { color: var(--ok); }
-.funnel-amount.neg { color: var(--danger); }
-.funnel-track {
+.wf-val.pos { color: var(--ok); }
+.wf-val.neg { color: var(--danger); }
+.wf-track {
+  position: relative;
   width: 100%;
-  height: 150px;
-  display: flex;
-  align-items: flex-end;
+  height: 170px;
 }
-.funnel-fill {
-  width: 100%;
-  background: var(--primary);
-  border-radius: 6px 6px 0 0;
-  min-height: 4px;
-  transition: height .25s ease;
+.wf-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 4px;
+  min-height: 3px;
+  transition: height .25s ease, bottom .25s ease;
 }
-.funnel-fill.pos-bar { background: var(--ok); }
-.funnel-fill.neg-bar { background: var(--danger); }
-.funnel-label {
-  font-size: .76rem;
+.wf-start  { background: var(--primary); }
+.wf-dec    { background: var(--danger); opacity: .85; }
+.wf-pos    { background: var(--ok); }
+.wf-neg    { background: var(--danger); }
+.wf-label {
+  font-size: .74rem;
   color: var(--text);
   margin-top: .45rem;
   text-align: center;
   line-height: 1.2;
 }
-.funnel-minus {
-  font-size: .68rem;
-  color: var(--danger);
-  text-align: center;
-  line-height: 1.25;
-  margin-top: .2rem;
-  min-height: 2.4em;
-}
-.funnel-minus strong { font-weight: 700; }
 .funnel-car-tabs { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .75rem; }
 .funnel-car-tab  { padding: .22rem .65rem; font-size: .78rem; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
 .funnel-car-tab:hover  { background: var(--surface-alt); color: var(--text); }
@@ -781,6 +788,6 @@ code {
   .gantt { overflow-x: auto; }
   .gantt-row { min-width: 1360px; }
   .summary-hero { grid-template-columns: 1fr; }
-  .funnel { overflow-x: auto; padding-bottom: .25rem; }
-  .funnel-col { flex: 0 0 110px; }
+  .wf { overflow-x: auto; padding-bottom: .25rem; }
+  .wf-col { flex: 0 0 96px; }
 }

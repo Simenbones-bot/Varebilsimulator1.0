@@ -70,6 +70,7 @@ let ganttExpanded = false;
 let tripsCollapsed = false;
 let summaryExpanded = false;
 let selectedCarId = "__dep__";
+let chartCollapsed = false;
 
 // ---- Oppstart --------------------------------------------------------------
 (async function init() {
@@ -552,28 +553,42 @@ function renderSummary(dep) {
   const afterLonn  = fRevMonth - fLonnCut;
   const afterFaste = afterLonn - fFasteCut;
   const afterKons  = afterFaste - fKonsCut;
-  const funnelSteps = [
-    { label: "Inntekt",             value: fRevMonth },
-    { label: "Etter lønn",          value: afterLonn,  cut: fLonnCut,   cutLabel: fLonnLabel },
-    { label: "Etter faste kost.",   value: afterFaste, cut: fFasteCut,  cutLabel: fFasteLabel },
-    { label: "Etter konsernfelles", value: afterKons,  cut: fKonsCut,   cutLabel: "Konsernfelles" },
-    { label: "Overskudd",           value: fResult,    cut: fMarginCut, cutLabel: "Påslag" }
+  // Waterfall: Inntekt (total) → fratrekk-trinn → Overskudd (total)
+  const wfSteps = [
+    { label: "Inntekt",       kind: "start",  value: fRevMonth, lo: 0,                    hi: fRevMonth },
+    { label: fLonnLabel,      kind: "dec",    value: fLonnCut,  lo: afterLonn,            hi: fRevMonth },
+    { label: fFasteLabel,     kind: "dec",    value: fFasteCut, lo: afterFaste,           hi: afterLonn },
+    { label: "Konsernfelles", kind: "dec",    value: fKonsCut,  lo: afterKons,            hi: afterFaste },
+    { label: "Påslag",        kind: "dec",    value: fMarginCut, lo: fResult,             hi: afterKons },
+    { label: "Overskudd",     kind: "result", value: fResult,   lo: Math.min(0, fResult), hi: Math.max(0, fResult) }
   ];
-  const fMax = Math.max(fRevMonth, 1);
-  const funnelHtml = funnelSteps.map((s, i) => {
-    const isLast = i === funnelSteps.length - 1;
-    const fillCls = isLast
-      ? (s.value >= 0 ? "funnel-fill pos-bar" : "funnel-fill neg-bar")
-      : "funnel-fill";
-    const hPct = Math.max(2, (Math.max(0, s.value) / fMax) * 100).toFixed(1);
-    const cut = s.cut != null
-      ? `<div class="funnel-minus">− ${esc(s.cutLabel)}<br><strong>${fmtKr(s.cut)}</strong></div>`
-      : `<div class="funnel-minus"></div>`;
-    return `<div class="funnel-col">
-        <div class="funnel-amount${isLast ? (s.value >= 0 ? " pos" : " neg") : ""}">${fmtKr(s.value)}</div>
-        <div class="funnel-track"><div class="${fillCls}" style="height:${hPct}%"></div></div>
-        <div class="funnel-label">${esc(s.label)}</div>
-        ${cut}
+  const chartMax = Math.max(fRevMonth, 0);
+  const chartMin = Math.min(0, fResult, afterKons, afterFaste, afterLonn);
+  const range = chartMax - chartMin || 1;
+  const yPct = (v) => ((v - chartMin) / range) * 100;
+  const zeroBar = chartMin < 0
+    ? `<div class="wf-zero" style="bottom:${yPct(0).toFixed(2)}%"></div>`
+    : "";
+  const wfHtml = wfSteps.map((s) => {
+    const bottom = yPct(Math.min(s.lo, s.hi));
+    const rawH = Math.abs(yPct(s.hi) - yPct(s.lo));
+    const height = Math.max(rawH, 1.5);
+    const barCls =
+      s.kind === "dec" ? "wf-bar wf-dec"
+      : s.kind === "result" ? (s.value >= 0 ? "wf-bar wf-pos" : "wf-bar wf-neg")
+      : "wf-bar wf-start";
+    const valTxt = s.kind === "dec" ? `−${fmtKr(s.value)}` : fmtKr(s.value);
+    const valCls =
+      s.kind === "dec" ? "wf-val neg"
+      : s.kind === "result" ? (s.value >= 0 ? "wf-val pos" : "wf-val neg")
+      : "wf-val";
+    return `<div class="wf-col">
+        <div class="${valCls}">${valTxt}</div>
+        <div class="wf-track">
+          ${zeroBar}
+          <div class="${barCls}" style="bottom:${bottom.toFixed(2)}%;height:${height.toFixed(2)}%"></div>
+        </div>
+        <div class="wf-label">${esc(s.label)}</div>
       </div>`;
   }).join("");
 
@@ -584,7 +599,15 @@ function renderSummary(dep) {
     </div>`;
 
   const funnelSection = monthRevenue > 0
-    ? `<div class="card funnel-card">${carTabs}<div class="funnel">${funnelHtml}</div></div>`
+    ? `<div class="card funnel-card">
+        <div class="wf-head">
+          <button class="btn-collapse" data-action="toggle-chart" aria-label="Vis/skjul diagram">
+            ${chartCollapsed ? "▶" : "▼"}
+          </button>
+          <h3>Kostnadsflyt</h3>
+        </div>
+        ${chartCollapsed ? "" : `${carTabs}<div class="wf">${wfHtml}</div>`}
+      </div>`
     : "";
 
   return `
@@ -1059,6 +1082,9 @@ app.addEventListener("click", async (e) => {
     openYearSimulation(dep);
   } else if (action === "select-funnel-car") {
     selectedCarId = t.dataset.carId || "__dep__";
+    renderContent();
+  } else if (action === "toggle-chart") {
+    chartCollapsed = !chartCollapsed;
     renderContent();
   } else if (action === "toggle-summary") {
     summaryExpanded = !summaryExpanded;
