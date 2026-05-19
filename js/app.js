@@ -141,7 +141,7 @@ function renderApp() {
       : `<span class="badge warn">Lokal lagring</span>`;
 
   const tabs = [
-    ["kjøringer", "Kjøringer"],
+    ["kjøringer", "Rutemaster"],
     ["biler", "Biler"],
     ["faste", "Faste kostnader"],
     ["drivstoff", "Drivstoff"],
@@ -293,7 +293,7 @@ function renderKjoringer(el, dep) {
   const trips = dep.trips || [];
   el.innerHTML = `
     <div class="section-head">
-      <h2>Ukesplan – ${esc(dep.name)}</h2>
+      <h2>Rutemaster – ${esc(dep.name)}</h2>
       <div class="btn-group">
         <button class="btn small ghost" data-action="simulate-year">Simuler år</button>
         <button class="btn small ghost" data-action="toggle-gantt">${
@@ -306,6 +306,9 @@ function renderKjoringer(el, dep) {
       </div>
     </div>
     ${renderSummary(dep)}
+    <div class="section-head sub" style="margin-top:.75rem;margin-bottom:.25rem">
+      <h3>Bil gantt</h3>
+    </div>
     ${renderGantt(dep, ganttExpanded)}
     <div class="section-head sub">
       <h3>
