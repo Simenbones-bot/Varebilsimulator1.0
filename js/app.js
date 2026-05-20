@@ -142,7 +142,7 @@ function renderApp() {
       : `<span class="badge warn">Lokal lagring</span>`;
 
   const tabs = [
-    ["kjøringer", "Rutemaster"],
+    ["kjøringer", "Ruter"],
     ["biler", "Biler"],
     ["faste", "Faste kostnader"],
     ["drivstoff", "Drivstoff"],
@@ -294,7 +294,7 @@ function renderKjoringer(el, dep) {
   const trips = dep.trips || [];
   el.innerHTML = `
     <div class="section-head">
-      <h2>Rutemaster – ${esc(dep.name)}</h2>
+      <h2>Ruter – ${esc(dep.name)}</h2>
       <div class="btn-group">
         <button class="btn small ghost" data-action="simulate-year">Simuler år</button>
         <button class="btn small ghost" data-action="trip-template">Mal ↓</button>
@@ -316,7 +316,7 @@ function renderKjoringer(el, dep) {
         <button class="btn-collapse" data-action="toggle-trips" aria-label="Vis/skjul kjøringer">
           ${tripsCollapsed ? "▶" : "▼"}
         </button>
-        Kjøringer (${trips.length})
+        Rutemaster (${trips.length})
       </h3>
     </div>
     ${tripsCollapsed ? "" : trips.length
