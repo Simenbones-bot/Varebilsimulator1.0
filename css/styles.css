@@ -1,6 +1,7 @@
 :root {
   --bg: #f4f6fb;
   --surface: #ffffff;
+  --surface-alt: #f4f5fa;
   --border: #e3e7ef;
   --text: #1d2433;
   --muted: #6b7385;
@@ -53,6 +54,12 @@ code {
 .btn:hover { background: #f7f8fc; }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:focus-visible,
+.tab:focus-visible,
+.chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: 1px;
+}
 .btn.primary {
   background: var(--primary);
   border-color: var(--primary);
@@ -160,6 +167,10 @@ code {
   padding: 0 1.25rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  overflow-x: auto;
 }
 .tab {
   border: none;
@@ -169,8 +180,10 @@ code {
   color: var(--muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
+  border-radius: 8px 8px 0 0;
+  white-space: nowrap;
 }
-.tab:hover { color: var(--text); }
+.tab:hover { color: var(--text); background: var(--surface-alt); }
 .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 
 .content { padding: 1.5rem; max-width: 1180px; margin: 0 auto; }
@@ -234,6 +247,83 @@ code {
   color: var(--muted);
 }
 
+/* Velkomst / tom tilstand ---------------------------------------------------- */
+.welcome { padding: 3rem 2rem; }
+.welcome-icon { font-size: 2.5rem; margin-bottom: .5rem; }
+.welcome h2 { color: var(--text); }
+.welcome p { max-width: 420px; margin: .5rem auto 1.25rem; }
+
+/* Kom-i-gang-veiviser -------------------------------------------------------- */
+.onboarding {
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--primary);
+}
+.onboarding-steps {
+  list-style: none;
+  margin: .85rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+}
+.onboarding-steps li {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+}
+.step-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: var(--primary);
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.onboarding-steps li.done .step-mark { background: var(--ok); }
+.onboarding-steps li.done .step-label {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* Forutsetninger-chips ------------------------------------------------------- */
+.assumptions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-bottom: .9rem;
+}
+.assumptions-title {
+  font-size: .74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--muted);
+  margin-right: .25rem;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font: inherit;
+  font-size: .8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: .25rem .7rem;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.chip strong { color: var(--text); font-weight: 650; }
+.chip:hover { border-color: var(--primary); background: #f7f8fc; }
+.chip-warn { border-color: #ecca90; background: #fdf6e9; }
+.chip-warn strong { color: var(--warn); }
+
 /* Oppsummering ------------------------------------------------------------- */
 .summary {
   display: grid;
@@ -259,6 +349,8 @@ code {
 .stat strong { font-size: 1.1rem; }
 .stat-hero { padding: 1.1rem 1.25rem; }
 .stat-hero strong { font-size: 1.6rem; display: block; margin-top: .2rem; }
+.stat-result.pos-bg { background: #f2faf5; border-color: #cdebd8; }
+.stat-result.neg-bg { background: #fdf3f3; border-color: #f3cfcf; }
 .stat .info-i { position: absolute; top: .45rem; right: .5rem; margin-left: 0; }
 .pos { color: var(--ok); }
 .neg { color: var(--danger); }
@@ -512,6 +604,7 @@ code {
   color: var(--muted);
 }
 .list tr:last-child td { border-bottom: none; }
+.list tbody tr:hover td { background: #fafbfe; }
 .row-actions { display: flex; gap: .35rem; }
 .ruter-cell { text-align: center; }
 .ruter-badge {
@@ -546,12 +639,23 @@ code {
 }
 .modal {
   width: 100%;
-  max-width: 460px;
+  max-width: 560px;
   max-height: 88vh;
   display: flex;
   flex-direction: column;
 }
-.modal-body { overflow-y: auto; padding-right: .25rem; }
+.modal-body {
+  overflow-y: auto;
+  padding-right: .25rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+  align-items: start;
+}
+.modal-body > .field-full,
+.modal-body > .check,
+.modal-body > .days-field { grid-column: 1 / -1; }
+.report-modal .modal-body { display: block; }
 .modal label { margin: .65rem 0; }
 .modal .input-wrap { position: relative; display: block; }
 .modal .suffix {
@@ -790,6 +894,7 @@ code {
 
 @media (max-width: 640px) {
   .content { padding: 1rem; }
+  .modal-body { grid-template-columns: 1fr; }
   .gantt { overflow-x: auto; }
   .gantt-row { min-width: 1360px; }
   .summary-hero { grid-template-columns: 1fr; }

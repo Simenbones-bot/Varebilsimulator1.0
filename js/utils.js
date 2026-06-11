@@ -60,6 +60,13 @@ export function fmtNum(n) {
   });
 }
 
+// Som fmtNum, men beholder inntil to desimaler (priser som 18,5 kr/l).
+export function fmtDec(n) {
+  return (Number(n) || 0).toLocaleString("no-NO", {
+    maximumFractionDigits: 2
+  });
+}
+
 export function fmtHours(min) {
   const h = Math.floor(min / 60);
   const m = min % 60;

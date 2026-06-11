@@ -41,6 +41,7 @@ import {
   durationMinutes,
   fmtKr,
   fmtNum,
+  fmtDec,
   carMonthly,
   MONTH_FACTOR,
   infoIcon,
@@ -214,9 +215,12 @@ function renderContent() {
   }
   const dep = selectedDepartment();
   if (!dep) {
-    content.innerHTML = `<div class="card empty">
-      <p>Du har ingen avdelinger enna.</p>
-      <button class="btn primary" data-action="new-dep">Opprett din forste avdeling</button>
+    content.innerHTML = `<div class="card empty welcome">
+      <div class="welcome-icon">🚐</div>
+      <h2>Velkommen til Varebilsimulator</h2>
+      <p>Opprett en avdeling, registrer biler og kjøringer — så regner appen
+        fortløpende ut inntekter, kostnader og resultat for deg.</p>
+      <button class="btn primary" data-action="new-dep">+ Opprett din første avdeling</button>
     </div>`;
     return;
   }
@@ -294,19 +298,74 @@ function carCard(c) {
 }
 
 // ---- Kjøringer (Gantt) -----------------------------------------------------
+
+// Kom-i-gang-veiviser til avdelingen har både biler og kjøringer.
+function renderOnboarding(dep) {
+  const cars = dep.cars || [];
+  const trips = dep.trips || [];
+  const fuel = dep.fuel || {};
+  if (cars.length && trips.length) return "";
+  const fuelSet = num(fuel.dieselPrice) > 0 || num(fuel.electricityPrice) > 0;
+  const steps = [
+    { done: cars.length > 0, label: "Registrer bilene i avdelingen", btn: "+ Registrer bil", action: "add-car" },
+    { done: fuelSet, label: "Sett drivstoffpriser", btn: "Sett priser", action: "edit-fuel" },
+    { done: trips.length > 0, label: "Legg til kjøringene (ruter)", btn: "+ Ny kjøring", action: "add-trip" }
+  ];
+  return `<div class="card onboarding">
+    <h3>Kom i gang med simuleringen</h3>
+    <p class="muted">Tre steg, så regner appen ut inntekter, kostnader og resultat for avdelingen.</p>
+    <ol class="onboarding-steps">
+      ${steps
+        .map(
+          (s, i) => `<li class="${s.done ? "done" : ""}">
+        <span class="step-mark">${s.done ? "✓" : i + 1}</span>
+        <span class="step-label">${s.label}</span>
+        ${s.done ? "" : `<button class="btn small primary" data-action="${s.action}">${s.btn}</button>`}
+      </li>`
+        )
+        .join("")}
+    </ol>
+  </div>`;
+}
+
+// Kompakt, klikkbar rad med forutsetningene bak tallene — redigerbare herfra,
+// slik at man slipper å bytte fane for å justere simuleringen.
+function renderAssumptions(dep) {
+  const fuel = dep.fuel || {};
+  const p = dep.personnel || { driverRate: 250, socialRate: 36 };
+  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
+  const cars = dep.cars || [];
+  const hasDieselCar = cars.some((c) => c.fuelType !== "el");
+  const hasElCar = cars.some((c) => c.fuelType === "el");
+  const chip = (label, value, action, warn = false) =>
+    `<button class="chip${warn ? " chip-warn" : ""}" data-action="${action}"
+       title="Klikk for å endre"><span>${label}</span><strong>${value}</strong></button>`;
+  return `<div class="assumptions">
+    <span class="assumptions-title">Forutsetninger</span>
+    ${chip("Diesel", num(fuel.dieselPrice) ? `${fmtDec(fuel.dieselPrice)} kr/l` : "ikke satt", "edit-fuel", hasDieselCar && !num(fuel.dieselPrice))}
+    ${chip("Strøm", num(fuel.electricityPrice) ? `${fmtDec(fuel.electricityPrice)} kr/kWh` : "ikke satt", "edit-fuel", hasElCar && !num(fuel.electricityPrice))}
+    ${chip("Sjåførsats", `${fmtDec(p.driverRate)} kr/t`, "edit-personnel", !num(p.driverRate))}
+    ${chip("Sosiale", `${fmtDec(p.socialRate)} %`, "edit-personnel")}
+    ${chip("Konsernfelles", `${fmtDec(mkp.konsernfelles)} %`, "edit-markups")}
+    ${chip("Margin", `${fmtDec(mkp.margin)} %`, "edit-markups")}
+  </div>`;
+}
+
 function renderKjoringer(el, dep) {
   const trips = dep.trips || [];
   el.innerHTML = `
     <div class="section-head">
       <h2>Ruter – ${esc(dep.name)}</h2>
       <div class="btn-group">
-        <button class="btn small ghost" data-action="simulate-year">Simuler år</button>
+        <button class="btn small" data-action="simulate-year">📅 Simuler år</button>
         <button class="btn small ghost" data-action="trip-template">Mal ↓</button>
         <button class="btn small ghost" data-action="import-trips">Importer CSV</button>
         <button class="btn small ghost" data-action="export-trips">Eksporter CSV</button>
         <button class="btn primary" data-action="add-trip">+ Ny kjøring</button>
       </div>
     </div>
+    ${renderOnboarding(dep)}
+    ${renderAssumptions(dep)}
     ${renderSummary(dep)}
     <div class="section-head sub" style="margin-top:.75rem;margin-bottom:.25rem">
       <h3>Bil gantt</h3>
@@ -625,7 +684,7 @@ function renderSummary(dep) {
         <span>Kostnader pr. mnd${infoIcon(kostnadTip)}</span>
         <strong>${fmtKr(totalCostMonth)}</strong>
       </div>
-      <div class="stat stat-hero">
+      <div class="stat stat-hero stat-result ${result >= 0 ? "pos-bg" : "neg-bg"}">
         <span>Resultat pr. mnd${infoIcon(resultTip)}</span>
         <strong class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</strong>
       </div>
@@ -1364,7 +1423,7 @@ function fieldHtml(f) {
     </label>`;
   }
   const suffix = f.suffix ? `<span class="suffix">${esc(f.suffix)}</span>` : "";
-  return `<label>${esc(f.label)}
+  return `<label${f.type === "text" ? ' class="field-full"' : ""}>${esc(f.label)}
     <span class="input-wrap"><input type="${f.type}" name="${f.name}"
       value="${esc(v)}" ${f.required ? "required" : ""}
       ${f.type === "number" ? 'min="0" step="any"' : ""}/>${suffix}</span>
