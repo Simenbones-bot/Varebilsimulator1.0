@@ -48,7 +48,8 @@ import {
   tipRows,
   MONTHS_LONG,
   norwegianHolidays,
-  workingDaysInMonth
+  workingDaysInMonth,
+  effectiveDriverRate
 } from "./utils.js";
 
 const app = document.getElementById("app");
@@ -346,6 +347,7 @@ function renderAssumptions(dep) {
     ${chip("Strøm", num(fuel.electricityPrice) ? `${fmtDec(fuel.electricityPrice)} kr/kWh` : "ikke satt", "edit-fuel", hasElCar && !num(fuel.electricityPrice))}
     ${chip("Sjåførsats", `${fmtDec(p.driverRate)} kr/t`, "edit-personnel", !num(p.driverRate))}
     ${chip("Sosiale", `${fmtDec(p.socialRate)} %`, "edit-personnel")}
+    ${chip("Sykefravær", `${fmtDec(p.sickRate)} %`, "edit-personnel")}
     ${chip("Konsernfelles", `${fmtDec(mkp.konsernfelles)} %`, "edit-markups")}
     ${chip("Margin", `${fmtDec(mkp.margin)} %`, "edit-markups")}
   </div>`;
@@ -450,7 +452,7 @@ function renderSummary(dep) {
   const cars = dep.cars || [];
   const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
   const p = dep.personnel || { driverRate: 250, socialRate: 36 };
-  const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
+  const effectiveRate = effectiveDriverRate(p);
   const carCost = cars.reduce((s, c) => s + carMonthly(c), 0);
   const fixedCost = (dep.fixedCosts || []).reduce(
     (s, f) => s + num(f.amount),
@@ -533,7 +535,7 @@ function renderSummary(dep) {
       tipRows([
         ["Formel", "sjåførtimer/uke × effektiv sats × 52/12"],
         ["Grunnlag", "1 950 t/år (37,5 t/uke × 52 uker) → 163 t/mnd pr. FTE"],
-        ["Effektiv sats", `sjåførsats × (1 + ${socialPct} % sosiale)`],
+        ["Effektiv sats", `sjåførsats × (1 + ${socialPct} % sosiale)${num(p.sickRate) ? ` × (1 + ${num(p.sickRate)} % sykefravær)` : ""}`],
         ["Dobbel", "Dobbel bemanning teller 2×"]
       ])],
     ...(lederMonth > 0 ? [["Ledelse", `${fmtKr(lederMonth)} /mnd`,
@@ -706,7 +708,8 @@ function depWeeklyFinancials(dep) {
   const cars = dep.cars || [];
   const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
   const p = dep.personnel || { driverRate: 250, socialRate: 36 };
-  const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
+  // Grunnsats uten sykefravær — scenarioet i årssimuleringen styrer fraværet.
+  const effectiveRateBase = num(p.driverRate) * (1 + num(p.socialRate) / 100);
   const socialFactor = 1 + num(p.socialRate) / 100;
   const carCostMonth = cars.reduce((s, c) => s + carMonthly(c), 0);
   const fixedCostMonth = (dep.fixedCosts || []).reduce((s, f) => s + num(f.amount), 0);
@@ -733,28 +736,38 @@ function depWeeklyFinancials(dep) {
     (s, k) => s + (num(k.aarslonn) * num(k.aarsrverk)) / 12 * socialFactor, 0);
   const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
   return {
-    weekRevenue, fuelWeek, weekDriverHours, effectiveRate,
+    weekRevenue, fuelWeek, weekDriverHours, effectiveRateBase,
+    sickPct: num(p.sickRate),
     carCostMonth, fixedCostMonth, lederMonth, koordinatorMonth,
     konsPct: num(mkp.konsernfelles), marginPct: num(mkp.margin)
   };
 }
 
-function yearReportData(fin, year) {
+// scen: prosent-justeringer for hva-hvis-analyse.
+//   sick = sykefravær, wage = lønnsendring (alle), fuel/rev = drivstoff/inntekt.
+function yearReportData(fin, year, scen = {}) {
+  const sick = scen.sick === undefined ? fin.sickPct : Number(scen.sick) || 0;
+  const wageF = 1 + (Number(scen.wage) || 0) / 100;
+  const fuelF = 1 + (Number(scen.fuel) || 0) / 100;
+  const revF = 1 + (Number(scen.rev) || 0) / 100;
+  const effectiveRate = fin.effectiveRateBase * (1 + sick / 100) * wageF;
+  const lederMonth = fin.lederMonth * wageF;
+  const koordinatorMonth = fin.koordinatorMonth * wageF;
   const holidays = norwegianHolidays(year);
   const rows = [];
   const sum = { wd: 0, k3: 0, k4: 0, k5: 0, k6: 0, k7: 0, paslag: 0, res: 0 };
   for (let mo = 0; mo < 12; mo++) {
     const wd = workingDaysInMonth(year, mo, holidays);
     const factor = wd / 5;
-    const inntekt = fin.weekRevenue * factor;
-    const drivstoff = fin.fuelWeek * factor;
-    const lonnSjafor = fin.weekDriverHours * fin.effectiveRate * (52 / 12);
+    const inntekt = fin.weekRevenue * revF * factor;
+    const drivstoff = fin.fuelWeek * fuelF * factor;
+    const lonnSjafor = fin.weekDriverHours * effectiveRate * (52 / 12);
     const k3 = inntekt;
     const k4 = fin.carCostMonth + drivstoff;
-    const k5 = lonnSjafor + fin.lederMonth + fin.koordinatorMonth;
+    const k5 = lonnSjafor + lederMonth + koordinatorMonth;
     const k6 = fin.fixedCostMonth;
     const driftsbase =
-      fin.carCostMonth + drivstoff + lonnSjafor + fin.lederMonth + fin.koordinatorMonth;
+      fin.carCostMonth + drivstoff + lonnSjafor + lederMonth + koordinatorMonth;
     const k7 = driftsbase * (fin.konsPct / 100);
     const paslag = driftsbase * (fin.marginPct / 100);
     const res = k3 - k4 - k5 - k6 - k7 - paslag;
@@ -765,9 +778,9 @@ function yearReportData(fin, year) {
   return { rows, sum };
 }
 
-function renderYearReport(dep, year) {
+function renderYearReport(dep, year, scen = {}) {
   const fin = depWeeklyFinancials(dep);
-  const { rows, sum } = yearReportData(fin, year);
+  const { rows, sum } = yearReportData(fin, year, scen);
   const c = (v) => `<td class="num">${fmtKr(v)}</td>`;
   const body = rows
     .map(
@@ -801,12 +814,36 @@ function renderYearReport(dep, year) {
   </table>`;
 }
 
+// Finansrapport som CSV (semikolon-separert, åpnes rett i Excel).
+function yearReportCsv(dep, year, scen) {
+  const fin = depWeeklyFinancials(dep);
+  const { rows, sum } = yearReportData(fin, year, scen);
+  const r0 = (v) => Math.round(v);
+  const lines = [
+    "maaned;virkedager;k3_inntekter;k4_bil_materiell;k5_lonn;k6_annet;k7_konsernfelles;paslag;resultat"
+  ];
+  rows.forEach((r) => {
+    lines.push(
+      [MONTHS_LONG[r.mo], r.wd, r0(r.k3), r0(r.k4), r0(r.k5), r0(r.k6), r0(r.k7), r0(r.paslag), r0(r.res)]
+        .map(csvField)
+        .join(";")
+    );
+  });
+  lines.push(
+    [`Sum ${year}`, sum.wd, r0(sum.k3), r0(sum.k4), r0(sum.k5), r0(sum.k6), r0(sum.k7), r0(sum.paslag), r0(sum.res)]
+      .map(csvField)
+      .join(";")
+  );
+  return lines.join("\n");
+}
+
 function openYearSimulation(dep) {
   const overlay = document.createElement("div");
   overlay.className = "overlay";
   const thisYear = new Date().getFullYear();
   const years = [];
   for (let y = thisYear; y <= thisYear + 3; y++) years.push(y);
+  const p = dep.personnel || {};
   overlay.innerHTML = `
     <div class="card modal report-modal">
       <div class="report-head">
@@ -822,16 +859,56 @@ function openYearSimulation(dep) {
         Faste poster (bil, faste kostnader, ledelse, koordinator) er like hver
         måned inkl. sjåfør-lønn (52 uker/år); inntekt og drivstoff skaleres med virkedager.
       </p>
+      <div class="scenario">
+        <span class="scenario-title">Scenario</span>
+        <label>Sykefravær
+          <input data-x="sick" type="number" min="0" step="0.5" value="${num(p.sickRate)}"/> %
+        </label>
+        <label>Lønnsendring
+          <input data-x="wage" type="number" step="0.5" value="0"/> %
+        </label>
+        <label>Drivstoffendring
+          <input data-x="fuel" type="number" step="1" value="0"/> %
+        </label>
+        <label>Inntektsendring
+          <input data-x="rev" type="number" step="1" value="0"/> %
+        </label>
+        <button type="button" class="btn small ghost" data-x="reset">Nullstill</button>
+      </div>
       <div class="modal-body" data-x="body">${renderYearReport(dep, years[0])}</div>
       <div class="modal-foot">
+        <button type="button" class="btn" data-x="export">Eksporter CSV</button>
         <button type="button" class="btn ghost" data-x="close">Lukk</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
   const sel = overlay.querySelector('[data-x="year"]');
   const bodyEl = overlay.querySelector('[data-x="body"]');
-  sel.addEventListener("change", () => {
-    bodyEl.innerHTML = renderYearReport(dep, Number(sel.value));
+  const scenInput = (k) => overlay.querySelector(`[data-x="${k}"]`);
+  const scen = () => ({
+    sick: scenInput("sick").value,
+    wage: scenInput("wage").value,
+    fuel: scenInput("fuel").value,
+    rev: scenInput("rev").value
+  });
+  const refresh = () => {
+    bodyEl.innerHTML = renderYearReport(dep, Number(sel.value), scen());
+  };
+  sel.addEventListener("change", refresh);
+  ["sick", "wage", "fuel", "rev"].forEach((k) =>
+    scenInput(k).addEventListener("input", refresh)
+  );
+  overlay.querySelector('[data-x="reset"]').addEventListener("click", () => {
+    scenInput("sick").value = num(p.sickRate);
+    scenInput("wage").value = 0;
+    scenInput("fuel").value = 0;
+    scenInput("rev").value = 0;
+    refresh();
+  });
+  overlay.querySelector('[data-x="export"]').addEventListener("click", () => {
+    const year = Number(sel.value);
+    const safeName = (dep.name || "avdeling").replace(/[^\wæøåÆØÅ-]+/g, "_");
+    downloadCsv(`finansrapport_${safeName}_${year}.csv`, yearReportCsv(dep, year, scen()));
   });
   function close() {
     document.removeEventListener("keydown", onKey);
@@ -933,7 +1010,7 @@ function renderFuel(el, dep) {
 // ---- Personal --------------------------------------------------------------
 function renderPersonnel(el, dep) {
   const p = dep.personnel || { driverRate: 250, socialRate: 36 };
-  const effectiveRate = num(p.driverRate) * (1 + num(p.socialRate) / 100);
+  const effectiveRate = effectiveDriverRate(p);
   const socialFactor = 1 + num(p.socialRate) / 100;
   const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
   const ledere = dep.personnel.ledere || [];
@@ -992,10 +1069,12 @@ function renderPersonnel(el, dep) {
     <div class="summary">
       <div class="stat"><span>Sjåfør pr. time</span><strong>${fmtKr(p.driverRate)}</strong></div>
       <div class="stat"><span>Sosiale kostnader</span><strong>${num(p.socialRate)} %</strong></div>
+      <div class="stat"><span>Sykefravær</span><strong>${fmtDec(p.sickRate)} %</strong></div>
       <div class="stat"><span>Effektiv timesats</span><strong>${fmtKr(effectiveRate)}</strong></div>
     </div>
     <div class="card" style="margin-top:1rem;font-size:.9rem;color:var(--muted)">
-      Effektiv timesats = sjåfør × (1 + sosiale kostnader %).<br>
+      Effektiv timesats = sjåfør × (1 + sosiale kostnader %) × (1 + sykefravær %).
+      Sykefravær er et påslag på sjåførkostnaden (syk sjåfør + vikar).<br>
       Personalkostnad pr. måned beregnes automatisk fra alle kjøringer og vises i oppsummeringen.
     </div>
 
@@ -1554,7 +1633,8 @@ function personnelModal(personnel) {
   const p = personnel || { driverRate: 250, socialRate: 36 };
   return modal("Personalkostnader", [
     { name: "driverRate", label: "Sjåfør pr. time (kr/t)", type: "number", value: p.driverRate },
-    { name: "socialRate", label: "Sosiale kostnader (%)", type: "number", value: p.socialRate }
+    { name: "socialRate", label: "Sosiale kostnader (%)", type: "number", value: p.socialRate },
+    { name: "sickRate", label: "Sykefravær (%)", type: "number", value: p.sickRate ?? 0 }
   ]);
 }
 

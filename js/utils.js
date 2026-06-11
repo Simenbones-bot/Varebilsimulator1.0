@@ -27,6 +27,17 @@ export function carMonthly(c) {
   );
 }
 
+// Effektiv sjåførtimesats: grunnsats × sosiale kostnader × sykefraværspåslag.
+// Sykefravær modelleres som påslag på sjåførkostnaden (syk sjåfør + vikar).
+export function effectiveDriverRate(p) {
+  const n = (v) => Number(v) || 0;
+  return (
+    n(p?.driverRate) *
+    (1 + n(p?.socialRate) / 100) *
+    (1 + n(p?.sickRate) / 100)
+  );
+}
+
 export function esc(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")

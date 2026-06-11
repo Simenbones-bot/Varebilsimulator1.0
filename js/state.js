@@ -37,6 +37,7 @@ function normalizeDepartment(dep) {
   if (!dep.personnel || typeof dep.personnel !== "object") {
     dep.personnel = { driverRate: 250, socialRate: 36 };
   }
+  if (dep.personnel.sickRate === undefined) dep.personnel.sickRate = 0;
   if (!dep.markups || typeof dep.markups !== "object") {
     dep.markups = { konsernfelles: 6, margin: 5 };
   }
@@ -94,7 +95,7 @@ export function addDepartment(name) {
     trips: [],
     fixedCosts: [],
     fuel: { dieselPrice: 0, electricityPrice: 0 },
-    personnel: { driverRate: 250, socialRate: 36, ledere: [], koordinatorer: [] },
+    personnel: { driverRate: 250, socialRate: 36, sickRate: 0, ledere: [], koordinatorer: [] },
     markups: { konsernfelles: 6, margin: 5 }
   };
   State.data.departments.push(dep);
