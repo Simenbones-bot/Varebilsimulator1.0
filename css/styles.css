@@ -529,6 +529,27 @@ code {
   color: var(--muted);
   font-size: .9rem;
 }
+.gantt-empty-state p { margin: 0 0 .75rem; }
+
+/* Klikkbar bil-etikett (åpner rediger-skjema) */
+.car-label-btn { cursor: pointer; transition: background .12s; }
+.car-label-btn:hover { background: #eef0fa; }
+
+/* Hurtig «+ Legg til bil»-rad nederst i Gantt */
+.gantt-addrow { background: #fafbfe; }
+.gantt-add {
+  flex: 1;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--primary);
+  padding: .55rem .75rem;
+  cursor: pointer;
+  text-align: left;
+}
+.gantt-add:hover { background: #f0f1fb; }
 
 /* Uassignert-rad */
 .gantt-unassigned .car-label {

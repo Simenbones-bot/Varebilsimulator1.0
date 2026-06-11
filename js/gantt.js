@@ -214,13 +214,16 @@ function renderWeekHeader() {
 export function renderGantt(dep, expanded = false) {
   const cars = (dep.cars || [])
     .slice()
-    .sort((a, b) => (a.regNr || "").localeCompare(b.regNr || ""));
+    .sort((a, b) =>
+      (a.regNr || "").localeCompare(b.regNr || "", "no", { numeric: true })
+    );
   const trips = dep.trips || [];
 
   if (cars.length === 0) {
     return `<div class="gantt">
       <div class="gantt-empty-state">
-        Ingen biler registrert — legg til biler under «Biler»-fanen for å se Gantt-oversikten.
+        <p>Ingen biler registrert ennå.</p>
+        <button class="btn small primary" data-action="quick-add-car">+ Legg til bil</button>
       </div>
     </div>`;
   }
@@ -260,7 +263,8 @@ export function renderGantt(dep, expanded = false) {
         tripCosts[t.id] = tripSpecificCostPerHour(t, car, dep, totalMonthHours);
       });
       return `<div class="gantt-row">
-        <div class="car-label">
+        <div class="car-label car-label-btn" data-action="edit-car"
+             data-id="${esc(car.id)}" title="Klikk for å redigere bilen">
           <span class="car-regnr">${esc(car.regNr || "—")}</span>
           ${car.model ? `<span class="car-model">${esc(car.model)}</span>` : ""}
         </div>
@@ -315,10 +319,18 @@ export function renderGantt(dep, expanded = false) {
       </div>`
     : "";
 
+  const addRow = `<div class="gantt-row gantt-addrow">
+    <button class="gantt-add" data-action="quick-add-car"
+      title="Legger til en ny bil med automatisk navn — klikk på bilen etterpå for å fylle inn detaljer">
+      + Legg til bil
+    </button>
+  </div>`;
+
   return `<div class="gantt${expanded ? " gantt--expanded" : ""}">
     ${renderWeekHeader()}
     ${carRows}
     ${unassignedRow}
     ${summaryRow}
+    ${addRow}
   </div>`;
 }

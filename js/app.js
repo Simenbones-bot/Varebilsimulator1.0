@@ -1123,6 +1123,17 @@ app.addEventListener("click", async (e) => {
       addCar(dep, res);
       renderContent();
     }
+  } else if (action === "quick-add-car" && dep) {
+    addCar(dep, {
+      regNr: `Bil ${nextCarNumber(dep.cars)}`,
+      model: "",
+      vehicleType: "",
+      description: "",
+      fuelType: "diesel",
+      consumption: 0,
+      costs: {}
+    });
+    renderContent();
   } else if (action === "edit-car" && dep) {
     const car = dep.cars.find((c) => c.id === t.dataset.id);
     if (!car) return;
@@ -1484,7 +1495,9 @@ function carModal(car) {
 function tripModal(trip, dep) {
   const carOptions = (dep?.cars || [])
     .slice()
-    .sort((a, b) => (a.regNr || "").localeCompare(b.regNr || ""))
+    .sort((a, b) =>
+      (a.regNr || "").localeCompare(b.regNr || "", "no", { numeric: true })
+    )
     .map((c) => ({
       value: c.id,
       label: c.regNr + (c.model ? " – " + c.model : "")
@@ -1579,6 +1592,16 @@ function num(v) {
 function tripCarIds(t) {
   if (Array.isArray(t.carIds)) return t.carIds;
   return t.carId ? [t.carId] : [];
+}
+
+// Neste ledige nummer for hurtiglagte biler («Bil 1», «Bil 2», …).
+function nextCarNumber(cars) {
+  let max = 0;
+  (cars || []).forEach((c) => {
+    const m = /^bil\s+(\d+)$/i.exec((c.regNr || "").trim());
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return max + 1;
 }
 
 // ---- CSV-eksport / -import -------------------------------------------------
