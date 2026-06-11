@@ -13,6 +13,7 @@ import {
 import {
   State,
   loadData,
+  flushSave,
   selectedDepartment,
   addDepartment,
   deleteDepartment,
@@ -91,7 +92,7 @@ let chartCollapsed = false;
 })();
 
 // ---- Innlogging ------------------------------------------------------------
-function renderLogin(error = "") {
+function renderLogin(error = "", username = "") {
   app.innerHTML = `
     <div class="login-wrap">
       <form class="card login-card" id="login-form">
@@ -99,7 +100,8 @@ function renderLogin(error = "") {
         <p class="muted">Logg inn for å planlegge avdelinger og kjøringer.</p>
         ${error ? `<div class="alert">${esc(error)}</div>` : ""}
         <label>Brukernavn
-          <input name="username" autocomplete="username" required autofocus />
+          <input name="username" autocomplete="username" required
+                 value="${esc(username)}" ${username ? "" : "autofocus"} />
         </label>
         <label>Passord
           <input name="password" type="password"
@@ -115,20 +117,19 @@ function renderLogin(error = "") {
     .addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = e.target;
+      const uname = f.username.value;
       const btn = f.querySelector("button");
       btn.disabled = true;
       btn.textContent = "Logger inn …";
       try {
-        const session = await login(
-          f.username.value,
-          f.password.value
-        );
+        const session = await login(uname, f.password.value);
         State.session = session;
         await loadData(session.username);
         view = "kjøringer";
         renderApp();
       } catch (err) {
-        renderLogin(err.message || "Innlogging feilet");
+        renderLogin(err.message || "Innlogging feilet", uname);
+        document.querySelector('#login-form [name="password"]')?.focus();
       }
     });
 }
@@ -203,6 +204,9 @@ function renderDepSelect() {
 }
 
 function renderContent() {
+  // Skjul tooltipen: elementet den hang på kan være fjernet, og da kommer
+  // aldri mouseout-hendelsen som ellers ville gjemt den.
+  tooltip.hidden = true;
   const content = document.getElementById("content");
   if (view === "brukere" && State.session.isAdmin) {
     renderUsers(content);
@@ -770,8 +774,16 @@ function openYearSimulation(dep) {
   sel.addEventListener("change", () => {
     bodyEl.innerHTML = renderYearReport(dep, Number(sel.value));
   });
+  function close() {
+    document.removeEventListener("keydown", onKey);
+    overlay.remove();
+  }
+  function onKey(e) {
+    if (e.key === "Escape") close();
+  }
+  document.addEventListener("keydown", onKey);
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay || e.target.dataset.x === "close") overlay.remove();
+    if (e.target === overlay || e.target.dataset.x === "close") close();
   });
 }
 
@@ -1011,6 +1023,7 @@ app.addEventListener("change", (e) => {
   const sel = e.target.closest("[data-action='select-dep']");
   if (sel) {
     selectDepartment(sel.value);
+    selectedCarId = "__dep__";
     renderApp();
   }
 });
@@ -1022,6 +1035,7 @@ app.addEventListener("click", async (e) => {
   const dep = selectedDepartment();
 
   if (action === "logout") {
+    flushSave();
     logout();
     State.session = null;
     State.data = null;
@@ -1041,6 +1055,7 @@ app.addEventListener("click", async (e) => {
   } else if (action === "del-dep" && dep) {
     if (confirm(`Slette avdelingen "${dep.name}" med alle biler og kjøringer?`)) {
       deleteDepartment(dep.id);
+      selectedCarId = "__dep__";
       renderApp();
     }
   } else if (action === "add-car" && dep) {
@@ -1051,6 +1066,7 @@ app.addEventListener("click", async (e) => {
     }
   } else if (action === "edit-car" && dep) {
     const car = dep.cars.find((c) => c.id === t.dataset.id);
+    if (!car) return;
     const res = await carModal(car);
     if (res) {
       updateCar(dep, car.id, res);
@@ -1069,6 +1085,7 @@ app.addEventListener("click", async (e) => {
     }
   } else if (action === "edit-trip" && dep) {
     const trip = dep.trips.find((x) => x.id === t.dataset.id);
+    if (!trip) return;
     const res = await tripModal(trip, dep);
     if (res) {
       updateTrip(dep, trip.id, res);
@@ -1116,6 +1133,7 @@ app.addEventListener("click", async (e) => {
     }
   } else if (action === "edit-fixed" && dep) {
     const item = (dep.fixedCosts || []).find((f) => f.id === t.dataset.id);
+    if (!item) return;
     const res = await fixedCostModal(item);
     if (res) {
       updateFixedCost(dep, item.id, res);
@@ -1155,6 +1173,7 @@ app.addEventListener("click", async (e) => {
     const role = t.dataset.role;
     const key = role === "leder" ? "ledere" : "koordinatorer";
     const entry = (dep.personnel[key] || []).find((x) => x.id === t.dataset.id);
+    if (!entry) return;
     const res = await personnelRoleModal(role, entry);
     if (res) {
       updatePersonnelRole(dep, role, t.dataset.id, res);
@@ -1247,9 +1266,14 @@ function modal(title, fields) {
     form.querySelector("input,select,textarea")?.focus();
 
     function close(result) {
+      document.removeEventListener("keydown", onKey);
       overlay.remove();
       resolve(result);
     }
+    function onKey(e) {
+      if (e.key === "Escape") close(null);
+    }
+    document.addEventListener("keydown", onKey);
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay || e.target.dataset.x === "cancel") close(null);
     });
@@ -1509,16 +1533,54 @@ function downloadCsv(filename, text) {
   URL.revokeObjectURL(a.href);
 }
 
+// Felter med ; " eller linjeskift pakkes i anførselstegn ved eksport.
+function csvField(v) {
+  const s = String(v ?? "");
+  return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// Deler en CSV-linje på ; med støtte for anførselstegn ("" = ett ").
+function splitCsvLine(line) {
+  const out = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"' && cur === "") {
+      inQuotes = true;
+    } else if (ch === ";") {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
 function parseCsv(text) {
   const lines = text
+    .replace(/^\uFEFF/, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .trim()
     .split("\n");
   if (lines.length < 2) return [];
-  const headers = lines[0].split(";").map((h) => h.trim());
+  const headers = splitCsvLine(lines[0]).map((h) => h.trim());
   return lines.slice(1).map((line) => {
-    const vals = line.split(";");
+    const vals = splitCsvLine(line);
     const row = {};
     headers.forEach((h, i) => {
       row[h] = (vals[i] ?? "").trim();
@@ -1582,7 +1644,7 @@ function exportCarsCsv(dep) {
       k.budgetKm,
       c.description
     ]
-      .map((v) => v ?? "")
+      .map(csvField)
       .join(";");
   });
   downloadCsv("biler.csv", CAR_CSV_HEADERS + "\n" + rows.join("\n"));
@@ -1643,7 +1705,7 @@ function exportTripsCsv(dep) {
       t.revenuePerHour,
       t.color || ""
     ]
-      .map((v) => v ?? "")
+      .map(csvField)
       .join(";");
   });
   downloadCsv("kjoringer.csv", TRIP_CSV_HEADERS + "\n" + rows.join("\n"));

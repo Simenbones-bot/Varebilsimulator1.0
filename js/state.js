@@ -54,14 +54,27 @@ function normalizeDepartment(dep) {
 }
 
 let saveTimer = null;
+let pendingSave = null;
+
 export function save() {
   if (!State.session || !State.data) return;
+  // Fang brukernavn og data naa, slik at en utlogging for timeren fyrer
+  // ikke mister endringen.
+  pendingSave = { username: State.session.username, data: State.data };
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    Store.saveUserData(State.session.username, State.data).catch((err) =>
-      console.error("Lagring feilet:", err)
-    );
-  }, 250);
+  saveTimer = setTimeout(flushSave, 250);
+}
+
+// Skriver en ventende lagring umiddelbart (brukes ved utlogging).
+export function flushSave() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (!pendingSave) return;
+  const { username, data } = pendingSave;
+  pendingSave = null;
+  Store.saveUserData(username, data).catch((err) =>
+    console.error("Lagring feilet:", err)
+  );
 }
 
 export function selectedDepartment() {
@@ -81,7 +94,8 @@ export function addDepartment(name) {
     trips: [],
     fixedCosts: [],
     fuel: { dieselPrice: 0, electricityPrice: 0 },
-    personnel: { driverRate: 250, socialRate: 36, ledere: [], koordinatorer: [] }
+    personnel: { driverRate: 250, socialRate: 36, ledere: [], koordinatorer: [] },
+    markups: { konsernfelles: 6, margin: 5 }
   };
   State.data.departments.push(dep);
   State.data.selectedDepartmentId = dep.id;
@@ -115,6 +129,11 @@ export function updateCar(dep, id, car) {
 
 export function deleteCar(dep, id) {
   dep.cars = dep.cars.filter((c) => c.id !== id);
+  dep.trips.forEach((t) => {
+    if (Array.isArray(t.carIds)) {
+      t.carIds = t.carIds.filter((cid) => cid !== id);
+    }
+  });
   save();
 }
 
