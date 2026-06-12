@@ -69,6 +69,21 @@ const VEHICLE_TYPES = [
   { value: "liten_6",       label: "Liten varebil 6m³" }
 ];
 
+// Standardverdier for nye biler (hurtig-«+» i Gantt og Registrer bil-skjemaet).
+const CAR_DEFAULTS = {
+  vehicleType: "stor_15",
+  fuelType: "el",
+  consumption: 25,
+  costs: {
+    leasing: 20000,
+    insurance: 1500,
+    service: 25000,
+    tires: 7000,
+    damage: 30000,
+    parking: 2000
+  }
+};
+
 let view = "kjøringer";
 let ganttExpanded = false;
 let tripsCollapsed = false;
@@ -1295,11 +1310,11 @@ app.addEventListener("click", async (e) => {
     addCar(dep, {
       regNr: `Bil ${nextCarNumber(dep.cars)}`,
       model: "",
-      vehicleType: "",
       description: "",
-      fuelType: "diesel",
-      consumption: 0,
-      costs: {}
+      vehicleType: CAR_DEFAULTS.vehicleType,
+      fuelType: CAR_DEFAULTS.fuelType,
+      consumption: CAR_DEFAULTS.consumption,
+      costs: { ...CAR_DEFAULTS.costs }
     });
     renderContent();
   } else if (action === "edit-car" && dep) {
@@ -1635,23 +1650,24 @@ function fieldHtml(f) {
 }
 
 function carModal(car) {
-  const k = (car && car.costs) || {};
+  // Nye biler får standardverdier; ved redigering vises bilens egne verdier.
+  const k = car ? car.costs || {} : CAR_DEFAULTS.costs;
   return modal(car ? "Rediger bil" : "Registrer bil", [
     { name: "regNr", label: "Reg.nr", type: "text", required: true, value: car?.regNr },
     { name: "model", label: "Merke / modell", type: "text", value: car?.model },
-    { name: "vehicleType", label: "Kjøretøykategori", type: "select", value: car?.vehicleType || "", options: VEHICLE_TYPES },
+    { name: "vehicleType", label: "Kjøretøykategori", type: "select", value: car ? car.vehicleType || "" : CAR_DEFAULTS.vehicleType, options: VEHICLE_TYPES },
     { name: "description", label: "Beskrivelse", type: "text", value: car?.description },
     {
       name: "fuelType",
       label: "Drivstoff",
       type: "select",
-      value: car?.fuelType || "diesel",
+      value: car ? car.fuelType || "diesel" : CAR_DEFAULTS.fuelType,
       options: [
         { value: "diesel", label: "Diesel" },
         { value: "el", label: "Elektrisk" }
       ]
     },
-    { name: "consumption", label: "Forbruk (per 100 km)", type: "number", value: car?.consumption },
+    { name: "consumption", label: "Forbruk (per 100 km)", type: "number", value: car ? car.consumption : CAR_DEFAULTS.consumption },
     { name: "leasing", label: "Leasing (kr/mnd)", type: "number", value: k.leasing },
     { name: "insurance", label: "Forsikring (kr/mnd)", type: "number", value: k.insurance },
     { name: "service", label: "Service (kr/ar)", type: "number", value: k.service },
