@@ -414,6 +414,51 @@ code {
 .chip:hover { border-color: var(--primary); background: #f7f8fc; }
 .chip-warn { border-color: #ecca90; background: #fdf6e9; }
 .chip-warn strong { color: var(--warn); }
+.chip-caret { font-size: .6rem; color: var(--muted); margin-left: .05rem; }
+
+/* Nedtrekksboks for chip-justering */
+.chip-pop {
+  position: fixed;
+  z-index: 60;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: .8rem .9rem;
+  min-width: 200px;
+}
+.chip-pop-title {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin-bottom: .25rem;
+}
+.chip-pop label {
+  display: block;
+  font-size: .82rem;
+  color: var(--muted);
+  margin: .45rem 0;
+}
+.chip-pop input {
+  width: 100%;
+  margin-top: .2rem;
+  padding: .45rem .6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  color: var(--text);
+}
+.chip-pop input:focus {
+  outline: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-color: var(--primary);
+}
+.chip-pop-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: .55rem;
+}
 
 /* Oppsummering ------------------------------------------------------------- */
 .summary {

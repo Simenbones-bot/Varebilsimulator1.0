@@ -228,6 +228,7 @@ function renderContent() {
   // Skjul tooltipen: elementet den hang på kan være fjernet, og da kommer
   // aldri mouseout-hendelsen som ellers ville gjemt den.
   tooltip.hidden = true;
+  closeChipPopover();
   const content = document.getElementById("content");
   if (view === "brukere" && State.session.isAdmin) {
     renderUsers(content);
@@ -348,8 +349,8 @@ function renderOnboarding(dep) {
   </div>`;
 }
 
-// Kompakt, klikkbar rad med forutsetningene bak tallene — redigerbare herfra,
-// slik at man slipper å bytte fane for å justere simuleringen.
+// Kompakt, klikkbar rad med forutsetningene bak tallene — klikk på en chip
+// åpner en liten nedtrekksboks der verdien justeres direkte.
 function renderAssumptions(dep) {
   const fuel = dep.fuel || {};
   const p = dep.personnel || { driverRate: 250 };
@@ -357,19 +358,135 @@ function renderAssumptions(dep) {
   const cars = dep.cars || [];
   const hasDieselCar = cars.some((c) => c.fuelType !== "el");
   const hasElCar = cars.some((c) => c.fuelType === "el");
-  const chip = (label, value, action, warn = false) =>
-    `<button class="chip${warn ? " chip-warn" : ""}" data-action="${action}"
-       title="Klikk for å endre"><span>${label}</span><strong>${value}</strong></button>`;
+  const chip = (label, value, key, warn = false) =>
+    `<button class="chip${warn ? " chip-warn" : ""}" data-action="chip-edit" data-chip="${key}"
+       title="Klikk for å justere"><span>${label}</span><strong>${value}</strong><span class="chip-caret">▾</span></button>`;
   return `<div class="assumptions">
     <span class="assumptions-title">Forutsetninger</span>
-    ${chip("Diesel", num(fuel.dieselPrice) ? `${fmtDec(fuel.dieselPrice)} kr/l` : "ikke satt", "edit-fuel", hasDieselCar && !num(fuel.dieselPrice))}
-    ${chip("Strøm", num(fuel.electricityPrice) ? `${fmtDec(fuel.electricityPrice)} kr/kWh` : "ikke satt", "edit-fuel", hasElCar && !num(fuel.electricityPrice))}
-    ${chip("Sjåførsats", `${fmtDec(p.driverRate)} kr/t`, "edit-personnel", !num(p.driverRate))}
-    ${chip("Sosiale", `${fmtDec(socialRatePct(p))} %`, "edit-personnel")}
-    ${chip("Sykefravær", `${fmtDec(p.sickRate)} %`, "edit-personnel")}
-    ${chip("Konsernfelles", `${fmtDec(mkp.konsernfelles)} %`, "edit-markups")}
-    ${chip("Margin", `${fmtDec(mkp.margin)} %`, "edit-markups")}
+    ${chip("Diesel", num(fuel.dieselPrice) ? `${fmtDec(fuel.dieselPrice)} kr/l` : "ikke satt", "diesel", hasDieselCar && !num(fuel.dieselPrice))}
+    ${chip("Strøm", num(fuel.electricityPrice) ? `${fmtDec(fuel.electricityPrice)} kr/kWh` : "ikke satt", "strom", hasElCar && !num(fuel.electricityPrice))}
+    ${chip("Sjåførsats", `${fmtDec(p.driverRate)} kr/t`, "sjafor", !num(p.driverRate))}
+    ${chip("Sosiale", `${fmtDec(socialRatePct(p))} %`, "sosiale")}
+    ${chip("Sykefravær", `${fmtDec(p.sickRate)} %`, "sykefravaer")}
+    ${chip("Konsernfelles", `${fmtDec(mkp.konsernfelles)} %`, "konsernfelles")}
+    ${chip("Margin", `${fmtDec(mkp.margin)} %`, "margin")}
   </div>`;
+}
+
+// Hva hver chip redigerer: tittel, felter og lagringsfunksjon.
+const CHIP_EDITORS = {
+  diesel: {
+    title: "Dieselpris",
+    fields: [["dieselPrice", "Kr pr. liter"]],
+    get: (dep) => dep.fuel || {},
+    save: (dep, vals) => setFuel(dep, vals)
+  },
+  strom: {
+    title: "Strømpris",
+    fields: [["electricityPrice", "Kr pr. kWh"]],
+    get: (dep) => dep.fuel || {},
+    save: (dep, vals) => setFuel(dep, vals)
+  },
+  sjafor: {
+    title: "Sjåførsats",
+    fields: [["driverRate", "Kr pr. time"]],
+    get: (dep) => dep.personnel || {},
+    save: (dep, vals) => setPersonnel(dep, vals)
+  },
+  sosiale: {
+    title: "Sosiale kostnader",
+    fields: [["holidayRate", "Feriepenger (%)"], ["pensionRate", "Pensjon/sosiale (%)"]],
+    get: (dep) => dep.personnel || {},
+    save: (dep, vals) => setPersonnel(dep, vals)
+  },
+  sykefravaer: {
+    title: "Sykefravær",
+    fields: [["sickRate", "Sykefravær (%)"]],
+    get: (dep) => dep.personnel || {},
+    save: (dep, vals) => setPersonnel(dep, vals)
+  },
+  konsernfelles: {
+    title: "Konsernfelles",
+    fields: [["konsernfelles", "Påslag (%)"]],
+    get: (dep) => dep.markups || {},
+    save: (dep, vals) => setMarkups(dep, vals)
+  },
+  margin: {
+    title: "Margin",
+    fields: [["margin", "Påslag (%)"]],
+    get: (dep) => dep.markups || {},
+    save: (dep, vals) => setMarkups(dep, vals)
+  }
+};
+
+let chipPopoverCleanup = null;
+
+function closeChipPopover() {
+  if (chipPopoverCleanup) chipPopoverCleanup();
+}
+
+function openChipPopover(chipEl, dep) {
+  closeChipPopover();
+  const def = CHIP_EDITORS[chipEl.dataset.chip];
+  if (!def) return;
+  const cur = def.get(dep);
+  const pop = document.createElement("form");
+  pop.className = "chip-pop";
+  pop.innerHTML = `
+    <div class="chip-pop-title">${esc(def.title)}</div>
+    ${def.fields
+      .map(
+        ([key, label]) => `<label>${esc(label)}
+          <input type="number" min="0" step="any" name="${key}" value="${esc(cur[key] ?? "")}"/>
+        </label>`
+      )
+      .join("")}
+    <div class="chip-pop-foot">
+      <button type="submit" class="btn small primary">Lagre</button>
+    </div>`;
+  document.body.appendChild(pop);
+
+  // Plasser under chipen, klemt innenfor vindusbredden.
+  const r = chipEl.getBoundingClientRect();
+  let left = r.left;
+  if (left + pop.offsetWidth > window.innerWidth - 8) {
+    left = window.innerWidth - pop.offsetWidth - 8;
+  }
+  pop.style.left = Math.max(8, left) + "px";
+  pop.style.top = r.bottom + 6 + "px";
+
+  const onDown = (e) => {
+    if (!pop.contains(e.target) && !chipEl.contains(e.target)) closeChipPopover();
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") closeChipPopover();
+  };
+  const onScroll = () => closeChipPopover();
+  document.addEventListener("mousedown", onDown);
+  document.addEventListener("keydown", onKey);
+  document.addEventListener("scroll", onScroll, true);
+  chipPopoverCleanup = () => {
+    document.removeEventListener("mousedown", onDown);
+    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("scroll", onScroll, true);
+    pop.remove();
+    chipPopoverCleanup = null;
+  };
+
+  pop.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const vals = {};
+    def.fields.forEach(([key]) => {
+      vals[key] = num(pop.querySelector(`[name="${key}"]`).value);
+    });
+    def.save(dep, vals);
+    closeChipPopover();
+    renderContent();
+  });
+
+  const first = pop.querySelector("input");
+  first?.focus();
+  first?.select();
 }
 
 function renderKjoringer(el, dep) {
@@ -1458,6 +1575,8 @@ app.addEventListener("click", async (e) => {
       deleteFixedCost(dep, t.dataset.id);
       renderContent();
     }
+  } else if (action === "chip-edit" && dep) {
+    openChipPopover(t, dep);
   } else if (action === "edit-fuel" && dep) {
     const res = await fuelModal(dep.fuel);
     if (res) {
