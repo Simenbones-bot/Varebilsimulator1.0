@@ -577,9 +577,17 @@ function renderSummary(dep) {
   const mf = MONTH_FACTOR.toFixed(2);
   const driftsbaseTekst = "bilkostnad + drivstoff + personal + ledelse + koordinator";
 
+  // Driftskostnad i tre deler: kjøretøy, sjåfør og kontor/ledelse.
+  const vehicleCostMonth = carCost + fuelMonth;
+  const driverCostMonth = personnelMonth;
+  const officeCostMonth = lederMonth + koordinatorMonth + fixedCost;
+
   const inntektTip = tipRows([["Formel", `Inntekt pr. uke × ${mf}`]]);
   const kostnadTip = tipRows([
-    ["Inkluderer", "bilkostnad + faste + drivstoff + personal + ledelse + koordinator + konsernfelles + margin"]
+    ["Kjøretøy", fmtKr(vehicleCostMonth)],
+    ["Sjåfør", fmtKr(driverCostMonth)],
+    ["Kontor/ledelse", fmtKr(officeCostMonth)],
+    ["Konsernfelles + påslag", fmtKr(konsernfellesMonth + marginMonth)]
   ]);
   const resultTip = tipRows([
     ["Formel", "inntekt/mnd − bilkostnad − faste − drivstoff − personal − ledelse − koordinator − konsernfelles − margin"]
@@ -634,8 +642,9 @@ function renderSummary(dep) {
   const statCard = ([a, b, tip]) =>
     `<div class="stat"><span>${a}${tip ? infoIcon(tip) : ""}</span><strong>${b}</strong></div>`;
 
-  // Funnel — hele avdelingen, alle biler samlet, eller én valgt bil
-  let fRevMonth, fLonnCut, fLonnLabel, fFasteCut, fFasteLabel, fKonsCut, fMarginCut, fResult;
+  // Funnel — hele avdelingen, alle biler samlet, eller én valgt bil.
+  // Driftskostnaden vises i tre trinn: Kjøretøy, Sjåfør, Kontor/ledelse.
+  let fRevMonth, fVehCut, fDriverCut, fOfficeCut, fKonsCut, fMarginCut, fResult;
   const selCar =
     selectedCarId && selectedCarId !== "__dep__" && selectedCarId !== "__all__"
       ? cars.find((c) => c.id === selectedCarId)
@@ -654,51 +663,54 @@ function renderSummary(dep) {
       carFuelWeek        += num(t.km) * occ * (num(selCar.consumption) / 100) * price;
     });
     fRevMonth   = carRevWeek * MONTH_FACTOR;
-    fLonnCut    = carDriverHoursWeek * effectiveRate * (52 / 12);
-    fLonnLabel  = "Lønn (sjåfør)";
-    fFasteCut   = carMonthly(selCar) + carFuelWeek * MONTH_FACTOR;
-    fFasteLabel = "Bil + drivstoff";
-    const carDriftsbase = fLonnCut + fFasteCut;
+    fVehCut     = carMonthly(selCar) + carFuelWeek * MONTH_FACTOR;
+    fDriverCut  = carDriverHoursWeek * effectiveRate * (52 / 12);
+    fOfficeCut  = 0; // avdelingsoverhead holdes utenfor per-bil-visningen
+    const carDriftsbase = fVehCut + fDriverCut;
     fKonsCut    = carDriftsbase * (num(mkp.konsernfelles) / 100);
     fMarginCut  = carDriftsbase * (num(mkp.margin) / 100);
-    fResult     = fRevMonth - fLonnCut - fFasteCut - fKonsCut - fMarginCut;
   } else if (selectedCarId === "__all__") {
     // Alle biler samlet – kun driftskostnader, uten avdelingsoverhead
     const allDriftsbase = personnelMonth + carCost + fuelMonth;
     fRevMonth   = monthRevenue;
-    fLonnCut    = personnelMonth;
-    fLonnLabel  = "Lønn (sjåfør)";
-    fFasteCut   = carCost + fuelMonth;
-    fFasteLabel = "Bil + drivstoff";
+    fVehCut     = vehicleCostMonth;
+    fDriverCut  = driverCostMonth;
+    fOfficeCut  = 0;
     fKonsCut    = allDriftsbase * (num(mkp.konsernfelles) / 100);
     fMarginCut  = allDriftsbase * (num(mkp.margin) / 100);
-    fResult     = fRevMonth - fLonnCut - fFasteCut - fKonsCut - fMarginCut;
   } else {
-    // Hele avdelingen – inkl. ledelse, koordinator og faste kostnader
+    // Hele avdelingen – inkl. kontor/ledelse og faste kostnader
     fRevMonth   = monthRevenue;
-    fLonnCut    = personnelMonth + lederMonth + koordinatorMonth;
-    fLonnLabel  = "Lønn";
-    fFasteCut   = carCost + fixedCost + fuelMonth;
-    fFasteLabel = "Bil + faste + drivstoff";
+    fVehCut     = vehicleCostMonth;
+    fDriverCut  = driverCostMonth;
+    fOfficeCut  = officeCostMonth;
     fKonsCut    = konsernfellesMonth;
     fMarginCut  = marginMonth;
-    fResult     = result;
   }
 
-  const afterLonn  = fRevMonth - fLonnCut;
-  const afterFaste = afterLonn - fFasteCut;
-  const afterKons  = afterFaste - fKonsCut;
   // Waterfall: Inntekt (total) → fratrekk-trinn → Overskudd (total)
-  const wfSteps = [
-    { label: "Inntekt",       kind: "start",  value: fRevMonth, lo: 0,                    hi: fRevMonth },
-    { label: fLonnLabel,      kind: "dec",    value: fLonnCut,  lo: afterLonn,            hi: fRevMonth },
-    { label: fFasteLabel,     kind: "dec",    value: fFasteCut, lo: afterFaste,           hi: afterLonn },
-    { label: "Konsernfelles", kind: "dec",    value: fKonsCut,  lo: afterKons,            hi: afterFaste },
-    { label: "Påslag",        kind: "dec",    value: fMarginCut, lo: fResult,             hi: afterKons },
-    { label: "Overskudd",     kind: "result", value: fResult,   lo: Math.min(0, fResult), hi: Math.max(0, fResult) }
+  const cuts = [
+    ["Kjøretøy", fVehCut],
+    ["Sjåfør", fDriverCut],
+    ...(fOfficeCut > 0 ? [["Kontor/ledelse", fOfficeCut]] : []),
+    ["Konsernfelles", fKonsCut],
+    ["Påslag", fMarginCut]
   ];
+  let level = fRevMonth;
+  const wfSteps = [
+    { label: "Inntekt", kind: "start", value: fRevMonth, lo: 0, hi: fRevMonth }
+  ];
+  cuts.forEach(([label, v]) => {
+    wfSteps.push({ label, kind: "dec", value: v, lo: level - v, hi: level });
+    level -= v;
+  });
+  fResult = level;
+  wfSteps.push({
+    label: "Overskudd", kind: "result", value: fResult,
+    lo: Math.min(0, fResult), hi: Math.max(0, fResult)
+  });
   const chartMax = Math.max(fRevMonth, 0);
-  const chartMin = Math.min(0, fResult, afterKons, afterFaste, afterLonn);
+  const chartMin = Math.min(0, ...wfSteps.map((s) => s.lo));
   const range = chartMax - chartMin || 1;
   const yPct = (v) => ((v - chartMin) / range) * 100;
   const zeroBar = chartMin < 0
@@ -767,6 +779,30 @@ function renderSummary(dep) {
           <span>Resultat pr. mnd${infoIcon(resultTip)}</span>
           <strong class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</strong>
         </div>
+      </div>
+    </div>
+    <div class="cost-split">
+      <div class="stat">
+        <span>🚐 Kjøretøykostnad /mnd${infoIcon(tipRows([
+          ["Bil", `${fmtKr(carCost)} (leasing + forsikring + parkering + service/12 + dekk/12)`],
+          ["Drivstoff", fmtKr(fuelMonth)]
+        ]))}</span>
+        <strong>${fmtKr(vehicleCostMonth)}</strong>
+      </div>
+      <div class="stat">
+        <span>🧑‍✈️ Sjåfør /mnd${infoIcon(tipRows([
+          ["Formel", "sjåførtimer/uke × effektiv sats × 52/12"],
+          ["Effektiv sats", `${fmtKr(effectiveRate)} (inkl. sosiale${num(p.sickRate) ? " + sykefravær" : ""})`]
+        ]))}</span>
+        <strong>${fmtKr(driverCostMonth)}</strong>
+      </div>
+      <div class="stat">
+        <span>🏢 Kontor/ledelse /mnd${infoIcon(tipRows([
+          ["Ledelse", fmtKr(lederMonth)],
+          ["Koordinator", fmtKr(koordinatorMonth)],
+          ["Faste kostnader", fmtKr(fixedCost)]
+        ]))}</span>
+        <strong>${fmtKr(officeCostMonth)}</strong>
       </div>
     </div>
     ${funnelSection}
