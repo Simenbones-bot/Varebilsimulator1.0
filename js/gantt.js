@@ -104,6 +104,7 @@ function tripTooltip(trip, costPerHour) {
   const hours = mins / 60;
   const revenue = hours * (Number(trip.revenuePerHour) || 0);
   const rows = [
+    ...(trip.inactive ? [["Status", "Inaktiv — regnes ikke med"]] : []),
     ["Kunde", esc(trip.customer || "(uten navn)")],
     ["Type", TYPE_LABEL[trip.type] || "Annet"],
     ["Bemanning", STAFF_LABEL[trip.staffing] || "Enkelt"],
@@ -158,7 +159,7 @@ function renderTrack(carTrips, tripCosts = {}) {
       const rawWidth = (dur / TOTAL_MINS) * 100;
       const width = Math.min(rawWidth, 100 - parseFloat(left)).toFixed(4);
       const bg = trip.color ? `background:${esc(trip.color)};` : "";
-      blocks += `<div class="trip-block type-${esc(trip.type || "annet")}"
+      blocks += `<div class="trip-block type-${esc(trip.type || "annet")}${trip.inactive ? " trip-ghost" : ""}"
         style="left:${left}%;width:${width}%;${bg}"
         data-tip="${tipAttr}"
         data-trip="${esc(trip.id)}" title="">
@@ -220,7 +221,8 @@ export function renderGantt(dep, expanded = false) {
     .sort((a, b) =>
       (a.regNr || "").localeCompare(b.regNr || "", "no", { numeric: true })
     );
-  const trips = dep.trips || [];
+  const allTrips = dep.trips || [];
+  const trips = allTrips.filter((t) => !t.inactive);
 
   if (cars.length === 0) {
     return `<div class="gantt">
@@ -237,6 +239,7 @@ export function renderGantt(dep, expanded = false) {
   const carRows = cars
     .map((car) => {
       const carTrips = trips.filter((t) => tripCarIds(t).includes(car.id));
+      const carTripsDraw = allTrips.filter((t) => tripCarIds(t).includes(car.id));
       const util = carUtilization(car, trips);
       totalUtil += parseFloat(util);
       const oc = carCostPerHour(car, trips, dep);
@@ -271,7 +274,7 @@ export function renderGantt(dep, expanded = false) {
           <span class="car-regnr">${esc(car.regNr || "—")}</span>
           ${car.model ? `<span class="car-model">${esc(car.model)}</span>` : ""}
         </div>
-        <div class="gantt-track">${renderTrack(carTrips, tripCosts)}</div>
+        <div class="gantt-track">${renderTrack(carTripsDraw, tripCosts)}</div>
         <div class="util-cell">${util} %</div>
         <div class="fte-cell">${carFte > 0 ? carFte.toFixed(2) : "–"}</div>
         <div class="cost-cell ${oc && oc.loss ? "neg" : ""}">${
@@ -285,7 +288,7 @@ export function renderGantt(dep, expanded = false) {
     })
     .join("");
 
-  const unassigned = trips.filter((t) => tripCarIds(t).length === 0);
+  const unassigned = allTrips.filter((t) => tripCarIds(t).length === 0);
   const unassignedRow =
     unassigned.length > 0
       ? `<div class="gantt-row gantt-unassigned">

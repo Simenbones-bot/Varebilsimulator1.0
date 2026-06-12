@@ -898,6 +898,58 @@ select.cell-input { width: auto; max-width: 130px; cursor: pointer; }
 .add-row td { padding: 0; border-bottom: none; background: #fafbfe; }
 .add-row .gantt-add { width: 100%; }
 
+/* Aktiv/inaktiv-bryter for ruter */
+.active-toggle {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #d4d9e6;
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+  transition: background .15s, border-color .15s;
+}
+.active-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: left .15s;
+}
+.active-toggle.on { background: var(--ok); border-color: var(--ok); }
+.active-toggle.on::after { left: 18px; }
+
+/* Inaktiv rad: dempet, men gevinst-teksten holdes lesbar */
+tr.trip-row-inactive .cell-input,
+tr.trip-row-inactive select,
+tr.trip-row-inactive .day-chip,
+tr.trip-row-inactive .ruter-badge,
+tr.trip-row-inactive .time-pair { opacity: .45; }
+.trip-gain {
+  font-size: .72rem;
+  font-weight: 600;
+  margin-top: .1rem;
+  padding-left: .35rem;
+  white-space: nowrap;
+}
+.trip-gain.pos { color: var(--ok); }
+.trip-gain.neg { color: var(--danger); }
+
+/* Inaktiv rute ghostet i Gantt */
+.trip-block.trip-ghost {
+  opacity: .3;
+  filter: grayscale(.5);
+  outline: 1px dashed rgba(255, 255, 255, .8);
+  outline-offset: -2px;
+}
+
 /* Modal -------------------------------------------------------------------- */
 .overlay {
   position: fixed;

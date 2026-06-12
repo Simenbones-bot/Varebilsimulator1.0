@@ -518,18 +518,20 @@ function renderKjoringer(el, dep) {
         <button class="btn-collapse" data-action="toggle-trips" aria-label="Vis/skjul kjøringer">
           ${tripsCollapsed ? "▶" : "▼"}
         </button>
-        Rutemaster (${trips.length})
+        Rutemaster (${trips.length}${trips.filter((t) => t.inactive).length
+          ? `, ${trips.filter((t) => t.inactive).length} inaktiv${trips.filter((t) => t.inactive).length > 1 ? "e" : ""}`
+          : ""})
       </h3>
     </div>
     ${tripsCollapsed ? "" : trips.length
         ? `<table class="list trip-table">
             <thead><tr>
-              <th>Kunde</th><th>Type</th><th>Bemanning</th><th>Bil</th>
+              <th>Aktiv</th><th>Kunde</th><th>Type</th><th>Bemanning</th><th>Bil</th>
               <th>Tid</th><th>Dager</th><th>Km</th><th>Kr/t</th><th>Kategori</th><th>Ruter</th><th></th>
             </tr></thead>
             <tbody>${trips.map((t) => tripRow(t, dep)).join("")}</tbody>
             <tfoot><tr class="add-row">
-              <td colspan="11"><button class="gantt-add" data-action="quick-add-trip"
+              <td colspan="12"><button class="gantt-add" data-action="quick-add-trip"
                 title="Legger til en ny rute med standardverdier — fyll inn direkte i tabellen">+ Ny rute</button></td>
             </tr></tfoot>
           </table>`
@@ -600,9 +602,23 @@ function tripRow(t, dep) {
         .join("")}
     </select>`;
 
-  return `<tr>
+  // Gevinst ved aktivering: avdelingsresultat med ruten minus uten.
+  let gainHtml = "";
+  if (t.inactive) {
+    const act = activeTrips(dep);
+    const gain = depMonthlyResult(dep, [...act, t]) - depMonthlyResult(dep, act);
+    gainHtml = `<div class="trip-gain ${gain >= 0 ? "pos" : "neg"}"
+      title="Endring i avdelingens månedsresultat hvis ruten aktiveres (inkl. lønn, drivstoff og påslag)">
+      ${gain >= 0 ? "+" : "−"}${fmtKr(Math.abs(gain))} /mnd ved aktivering</div>`;
+  }
+
+  return `<tr class="${t.inactive ? "trip-row-inactive" : ""}">
+    <td><button type="button" class="active-toggle${t.inactive ? "" : " on"}"
+      data-action="toggle-trip-active" data-id="${tid}"
+      title="${t.inactive ? "Inaktiv — regnes ikke med. Klikk for å aktivere." : "Aktiv — klikk for å deaktivere"}"
+      aria-label="Aktiv/inaktiv"></button></td>
     <td><input class="cell-input" data-trip="${tid}" data-trip-field="customer"
-      value="${esc(t.customer || "")}" placeholder="Kundenavn"/></td>
+      value="${esc(t.customer || "")}" placeholder="Kundenavn"/>${gainHtml}</td>
     <td>${sel("type", t.type || "fast_rute", [
       { value: "fast_rute", label: "Fast rute" },
       { value: "annet", label: "Annet" }
@@ -635,6 +651,53 @@ function tripRow(t, dep) {
   </tr>`;
 }
 
+// Ruter merket inaktive holdes utenfor alle beregninger.
+function activeTrips(dep) {
+  return (dep.trips || []).filter((t) => !t.inactive);
+}
+
+// Månedsresultat for avdelingen gitt et sett kjøringer — brukes til å vise
+// hva aktivering av en inaktiv rute ville endret resultatet med.
+function depMonthlyResult(dep, trips) {
+  const cars = dep.cars || [];
+  const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
+  const p = dep.personnel || { driverRate: 250 };
+  const effectiveRate = effectiveDriverRate(p);
+  const socialFactor = 1 + socialRatePct(p) / 100;
+  const carCost = cars.reduce((s, c) => s + carMonthly(c), 0);
+  const fixedCost = (dep.fixedCosts || []).reduce((s, f) => s + num(f.amount), 0);
+  let weekRevenue = 0, fuelWeek = 0, weekDriverHours = 0;
+  trips.forEach((t) => {
+    const occ = (t.days || []).length;
+    const hours = durationMinutes(t.startTime, t.endTime) / 60;
+    const assigned = tripCarIds(t)
+      .map((id) => cars.find((c) => c.id === id))
+      .filter(Boolean);
+    const m = Math.max(assigned.length, 1);
+    const staffMult = t.staffing === "dobbel" ? 2 : 1;
+    weekRevenue += hours * num(t.revenuePerHour) * occ * m;
+    weekDriverHours += paidHours(t.startTime, t.endTime) * occ * m * staffMult;
+    assigned.forEach((c) => {
+      const price =
+        c.fuelType === "el" ? num(fuel.electricityPrice) : num(fuel.dieselPrice);
+      fuelWeek += num(t.km) * occ * (num(c.consumption) / 100) * price;
+    });
+  });
+  const fuelMonth = fuelWeek * MONTH_FACTOR;
+  const personnelMonth = weekDriverHours * effectiveRate * (52 / 12);
+  const monthRevenue = weekRevenue * MONTH_FACTOR;
+  const lederMonth = (dep.personnel?.ledere || []).reduce(
+    (s, l) => s + (num(l.aarslonn) * num(l.aarsrverk)) / 12 * socialFactor, 0);
+  const koordinatorMonth = (dep.personnel?.koordinatorer || []).reduce(
+    (s, k) => s + (num(k.aarslonn) * num(k.aarsrverk)) / 12 * socialFactor, 0);
+  const driftsbase = carCost + fuelMonth + personnelMonth + lederMonth + koordinatorMonth;
+  const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
+  return monthRevenue - carCost - fixedCost - fuelMonth - personnelMonth -
+    lederMonth - koordinatorMonth -
+    driftsbase * (num(mkp.konsernfelles) / 100) -
+    driftsbase * (num(mkp.margin) / 100);
+}
+
 function renderSummary(dep) {
   const cars = dep.cars || [];
   const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
@@ -649,7 +712,7 @@ function renderSummary(dep) {
   let weekRevenue = 0;
   let fuelWeek = 0;
   let weekDriverHours = 0;
-  (dep.trips || []).forEach((t) => {
+  activeTrips(dep).forEach((t) => {
     const occ = (t.days || []).length;
     const hours = durationMinutes(t.startTime, t.endTime) / 60;
     const assigned = tripCarIds(t)
@@ -771,7 +834,7 @@ function renderSummary(dep) {
       : null;
 
   if (selCar) {
-    const carTrips = (dep.trips || []).filter((t) => tripCarIds(t).includes(selCar.id));
+    const carTrips = activeTrips(dep).filter((t) => tripCarIds(t).includes(selCar.id));
     let carRevWeek = 0, carDriverHoursWeek = 0, carFuelWeek = 0;
     carTrips.forEach((t) => {
       const occ = (t.days || []).length;
@@ -963,7 +1026,7 @@ function depWeeklyFinancials(dep) {
   const carCostMonth = cars.reduce((s, c) => s + carMonthly(c), 0);
   const fixedCostMonth = (dep.fixedCosts || []).reduce((s, f) => s + num(f.amount), 0);
   let weekRevenue = 0, fuelWeek = 0, weekDriverHours = 0;
-  (dep.trips || []).forEach((t) => {
+  activeTrips(dep).forEach((t) => {
     const occ = (t.days || []).length;
     const hours = durationMinutes(t.startTime, t.endTime) / 60;
     const assigned = tripCarIds(t)
@@ -1271,7 +1334,7 @@ function renderPersonnel(el, dep) {
 
   // Driver FTE from trips
   let weekDriverHours = 0;
-  (dep.trips || []).forEach((t) => {
+  activeTrips(dep).forEach((t) => {
     const occ = (t.days || []).length;
     const hours = durationMinutes(t.startTime, t.endTime) / 60;
     const staffMult = t.staffing === "dobbel" ? 2 : 1;
@@ -1511,6 +1574,7 @@ app.addEventListener("click", async (e) => {
     addTrip(dep, {
       customer: `Rute ${nextTripNumber(dep.trips)}`,
       type: "fast_rute",
+      inactive: false,
       staffing: "enkelt",
       vehicleType: "",
       carIds: [],
@@ -1522,6 +1586,11 @@ app.addEventListener("click", async (e) => {
       revenuePerHour: 0,
       color: TRIP_COLORS[(dep.trips.length || 0) % TRIP_COLORS.length]
     });
+    renderContent();
+  } else if (action === "toggle-trip-active" && dep) {
+    const trip = dep.trips.find((x) => x.id === t.dataset.id);
+    if (!trip) return;
+    updateTrip(dep, trip.id, { inactive: !trip.inactive });
     renderContent();
   } else if (action === "toggle-trip-day" && dep) {
     const trip = dep.trips.find((x) => x.id === t.dataset.id);
@@ -2088,9 +2157,9 @@ const CAR_CSV_EXAMPLE =
   "AB12345;Ford Transit;Skapbil 19m3;diesel;8.5;5000;1200;8000;4000;0;500;;2026-06-01;50000;Varebil Oslo";
 
 const TRIP_CSV_HEADERS =
-  "kunde;type;bemanning;kategori;biler;starttid;sluttid;dager;km;kr_per_time;farge";
+  "kunde;type;bemanning;kategori;biler;starttid;sluttid;dager;km;kr_per_time;farge;aktiv";
 const TRIP_CSV_EXAMPLE =
-  "Rema 1000;Fast rute;Enkelt;Skapbil 19m3;AB12345;08:00;16:00;Man|Tir|Ons|Tor|Fre;120;450;#4f46e5";
+  "Rema 1000;Fast rute;Enkelt;Skapbil 19m3;AB12345;08:00;16:00;Man|Tir|Ons|Tor|Fre;120;450;#4f46e5;Ja";
 
 function vehicleLabelOf(val) {
   return VEHICLE_TYPES.find((v) => v.value === val && v.value)?.label || "";
@@ -2179,7 +2248,8 @@ function exportTripsCsv(dep) {
       dager,
       t.km,
       t.revenuePerHour,
-      t.color || ""
+      t.color || "",
+      t.inactive ? "Nei" : "Ja"
     ]
       .map(csvField)
       .join(";");
@@ -2220,7 +2290,8 @@ function importTripsCsv(text, dep) {
       revenuePerHour: num(r.kr_per_time),
       color:
         r.farge ||
-        TRIP_COLORS[(dep.trips.length || 0) % TRIP_COLORS.length]
+        TRIP_COLORS[(dep.trips.length || 0) % TRIP_COLORS.length],
+      inactive: (r.aktiv || "").trim().toLowerCase() === "nei"
     });
     ok++;
   });

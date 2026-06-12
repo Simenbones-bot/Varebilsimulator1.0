@@ -52,6 +52,7 @@ function normalizeDepartment(dep) {
       t.carIds = t.carId ? [t.carId] : [];
     }
     if (t.vehicleType === undefined) t.vehicleType = "";
+    if (t.inactive === undefined) t.inactive = false;
   });
   dep.cars.forEach((c) => {
     if (c.vehicleType === undefined) c.vehicleType = "";
