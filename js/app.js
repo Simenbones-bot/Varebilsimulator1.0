@@ -98,6 +98,7 @@ function renderLogin(error = "", username = "") {
   app.innerHTML = `
     <div class="login-wrap">
       <form class="card login-card" id="login-form">
+        <div class="login-brand"><span class="brand-mark">🚐</span></div>
         <h1>Varebilsimulator</h1>
         <p class="muted">Logg inn for å planlegge avdelinger og kjøringer.</p>
         ${error ? `<div class="alert">${esc(error)}</div>` : ""}
@@ -145,41 +146,43 @@ function renderApp() {
       : `<span class="badge warn">Lokal lagring</span>`;
 
   const tabs = [
-    ["kjøringer", "Ruter"],
-    ["biler", "Biler"],
-    ["faste", "Faste kostnader"],
-    ["drivstoff", "Drivstoff"],
-    ["personal", "Personal"]
+    ["kjøringer", "Ruter", "🗺️"],
+    ["biler", "Biler", "🚐"],
+    ["faste", "Faste kostnader", "🧾"],
+    ["drivstoff", "Drivstoff", "⛽"],
+    ["personal", "Personal", "👥"]
   ];
-  if (isAdmin) tabs.push(["brukere", "Brukere"]);
+  if (isAdmin) tabs.push(["brukere", "Brukere", "🔐"]);
 
   app.innerHTML = `
-    <header class="topbar">
-      <div class="brand">Varebilsimulator</div>
-      <div class="topbar-right">
-        ${modeBadge}
-        <span class="user">${esc(State.session.username)}</span>
-        <button class="btn ghost" data-action="logout">Logg ut</button>
+    <div class="app-header">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">🚐</span> Varebilsimulator</div>
+        <div class="topbar-right">
+          ${modeBadge}
+          <span class="user">${esc(State.session.username)}</span>
+          <button class="btn ghost" data-action="logout">Logg ut</button>
+        </div>
+      </header>
+
+      <div class="depbar">
+        ${renderDepSelect()}
+        <button class="btn" data-action="new-dep">+ Ny avdeling</button>
+        <button class="btn ghost danger" data-action="del-dep"
+          ${selectedDepartment() ? "" : "disabled"}>Slett avdeling</button>
       </div>
-    </header>
 
-    <div class="depbar">
-      ${renderDepSelect()}
-      <button class="btn" data-action="new-dep">+ Ny avdeling</button>
-      <button class="btn ghost danger" data-action="del-dep"
-        ${selectedDepartment() ? "" : "disabled"}>Slett avdeling</button>
+      <nav class="tabs">
+        ${tabs
+          .map(
+            ([k, label, ico]) =>
+              `<button class="tab ${
+                view === k ? "active" : ""
+              }" data-action="tab" data-tab="${k}"><span class="tab-ico">${ico}</span>${label}</button>`
+          )
+          .join("")}
+      </nav>
     </div>
-
-    <nav class="tabs">
-      ${tabs
-        .map(
-          ([k, label]) =>
-            `<button class="tab ${
-              view === k ? "active" : ""
-            }" data-action="tab" data-tab="${k}">${label}</button>`
-        )
-        .join("")}
-    </nav>
 
     <main class="content" id="content"></main>`;
 
@@ -729,16 +732,25 @@ function renderSummary(dep) {
   return `
     <div class="summary-hero">
       <div class="stat stat-hero">
-        <span>Inntekt pr. mnd${infoIcon(inntektTip)}</span>
-        <strong>${fmtKr(monthRevenue)}</strong>
+        <div class="stat-ico ico-rev">📈</div>
+        <div class="stat-body">
+          <span>Inntekt pr. mnd${infoIcon(inntektTip)}</span>
+          <strong>${fmtKr(monthRevenue)}</strong>
+        </div>
       </div>
       <div class="stat stat-hero">
-        <span>Kostnader pr. mnd${infoIcon(kostnadTip)}</span>
-        <strong>${fmtKr(totalCostMonth)}</strong>
+        <div class="stat-ico ico-cost">💸</div>
+        <div class="stat-body">
+          <span>Kostnader pr. mnd${infoIcon(kostnadTip)}</span>
+          <strong>${fmtKr(totalCostMonth)}</strong>
+        </div>
       </div>
       <div class="stat stat-hero stat-result ${result >= 0 ? "pos-bg" : "neg-bg"}">
-        <span>Resultat pr. mnd${infoIcon(resultTip)}</span>
-        <strong class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</strong>
+        <div class="stat-ico ${result >= 0 ? "ico-pos" : "ico-neg"}">${result >= 0 ? "✅" : "⚠️"}</div>
+        <div class="stat-body">
+          <span>Resultat pr. mnd${infoIcon(resultTip)}</span>
+          <strong class="${result >= 0 ? "pos" : "neg"}">${fmtKr(result)}</strong>
+        </div>
       </div>
     </div>
     ${funnelSection}
