@@ -385,65 +385,115 @@ function renderKjoringer(el, dep) {
       </h3>
     </div>
     ${tripsCollapsed ? "" : trips.length
-        ? `<table class="list">
+        ? `<table class="list trip-table">
             <thead><tr>
               <th>Kunde</th><th>Type</th><th>Bemanning</th><th>Bil</th>
               <th>Tid</th><th>Dager</th><th>Km</th><th>Kr/t</th><th>Kategori</th><th>Ruter</th><th></th>
             </tr></thead>
             <tbody>${trips.map((t) => tripRow(t, dep)).join("")}</tbody>
+            <tfoot><tr class="add-row">
+              <td colspan="11"><button class="gantt-add" data-action="quick-add-trip"
+                title="Legger til en ny rute med standardverdier — fyll inn direkte i tabellen">+ Ny rute</button></td>
+            </tr></tfoot>
           </table>`
-        : `<div class="card empty"><p>Ingen kjøringer planlagt.</p></div>`
+        : `<div class="card empty"><p>Ingen kjøringer planlagt.</p>
+            <button class="btn small primary" data-action="quick-add-trip">+ Ny rute</button></div>`
     }`;
 }
 
 function tripRow(t, dep) {
-  const cars = dep?.cars || [];
-  const regs = tripCarIds(t)
-    .map((id) => cars.find((c) => c.id === id))
-    .filter(Boolean)
-    .map((c) => esc(c.regNr));
-  const carLabel = regs.length ? regs.join(", ") : "–";
-  const vehicleLabel = VEHICLE_TYPES.find((v) => v.value === t.vehicleType && v.value)?.label || "–";
+  const cars = (dep?.cars || [])
+    .slice()
+    .sort((a, b) =>
+      (a.regNr || "").localeCompare(b.regNr || "", "no", { numeric: true })
+    );
+  const ids = tripCarIds(t).filter((id) => cars.find((c) => c.id === id));
   const needed = num(t.antallRuter);
-  const assigned = tripCarIds(t).filter((id) => cars.find((c) => c.id === id)).length;
-  let ruterCell;
-  if (!needed) {
-    ruterCell = `<td class="ruter-cell">–</td>`;
+  const assigned = ids.length;
+  const tid = esc(t.id);
+
+  // Bil: enkel nedtrekksliste ved 0–1 tildelte biler; flere biler styres i skjemaet.
+  let carCell;
+  if (assigned > 1) {
+    const regs = ids
+      .map((id) => cars.find((c) => c.id === id)?.regNr)
+      .filter(Boolean);
+    carCell = `<button class="btn small ghost" data-action="edit-trip" data-id="${tid}"
+      title="${esc(regs.join(", "))} — klikk for å endre">${assigned} biler</button>`;
   } else {
+    carCell = `<select class="cell-input" data-trip="${tid}" data-trip-field="carId">
+      <option value="">–</option>
+      ${cars
+        .map(
+          (c) =>
+            `<option value="${esc(c.id)}" ${ids[0] === c.id ? "selected" : ""}>${esc(
+              c.regNr || "—"
+            )}</option>`
+        )
+        .join("")}
+    </select>`;
+  }
+
+  const daySet = new Set(t.days || []);
+  const dayChips = DAYS_LONG.map(
+    (d, i) =>
+      `<button type="button" class="day-chip${daySet.has(i) ? " on" : ""}"
+        data-action="toggle-trip-day" data-id="${tid}" data-day="${i}"
+        title="${d}">${d.slice(0, 1)}</button>`
+  ).join("");
+
+  let ruterBadge = "";
+  if (needed) {
     const cls = assigned < needed ? "ruter-low" : assigned > needed ? "ruter-high" : "ruter-ok";
     const title = assigned < needed
       ? `Mangler ${needed - assigned} bil${needed - assigned > 1 ? "er" : ""}`
       : assigned > needed
-        ? `${assigned - needed} bil${assigned - needed > 1 ? "er" : " bil"} for mange`
+        ? `${assigned - needed} bil${assigned - needed > 1 ? "er" : ""} for mange`
         : "Riktig antall biler";
-    ruterCell = `<td class="ruter-cell"><span class="ruter-badge ${cls}" title="${esc(title)}">${assigned}/${needed}</span></td>`;
+    ruterBadge = `<span class="ruter-badge ${cls}" title="${esc(title)}">${assigned}/${needed}</span>`;
   }
+
+  const sel = (field, value, options) =>
+    `<select class="cell-input" data-trip="${tid}" data-trip-field="${field}">
+      ${options
+        .map(
+          (o) =>
+            `<option value="${esc(o.value)}" ${o.value === value ? "selected" : ""}>${esc(o.label)}</option>`
+        )
+        .join("")}
+    </select>`;
+
   return `<tr>
-    <td>${esc(t.customer || "(uten navn)")}</td>
-    <td><span class="pill type-${esc(t.type || "annet")}"${
-    t.color ? ` style="background:${esc(t.color)}"` : ""
-  }>${
-    t.type === "fast_rute" ? "Fast rute" : "Annet"
-  }</span></td>
-    <td>${t.staffing === "dobbel" ? "Dobbel" : "Enkelt"}</td>
-    <td>${carLabel}</td>
-    <td>${esc(t.startTime)}–${esc(t.endTime)}</td>
-    <td>${(t.days || [])
-      .slice()
-      .sort((a, b) => a - b)
-      .map((d) => DAYS_LONG[d].slice(0, 3))
-      .join(", ")}</td>
-    <td>${fmtNum(t.km)}</td>
-    <td>${fmtNum(t.revenuePerHour)}</td>
-    <td>${esc(vehicleLabel)}</td>
-    ${ruterCell}
+    <td><input class="cell-input" data-trip="${tid}" data-trip-field="customer"
+      value="${esc(t.customer || "")}" placeholder="Kundenavn"/></td>
+    <td>${sel("type", t.type || "fast_rute", [
+      { value: "fast_rute", label: "Fast rute" },
+      { value: "annet", label: "Annet" }
+    ])}</td>
+    <td>${sel("staffing", t.staffing || "enkelt", [
+      { value: "enkelt", label: "Enkelt" },
+      { value: "dobbel", label: "Dobbel" }
+    ])}</td>
+    <td>${carCell}</td>
+    <td><span class="time-pair">
+      <input class="cell-input cell-time" data-trip="${tid}" data-trip-field="startTime"
+        value="${esc(t.startTime)}" placeholder="HH:MM" maxlength="5" inputmode="numeric"/>–<input
+        class="cell-input cell-time" data-trip="${tid}" data-trip-field="endTime"
+        value="${esc(t.endTime)}" placeholder="HH:MM" maxlength="5" inputmode="numeric"/>
+    </span></td>
+    <td><span class="day-chips">${dayChips}</span></td>
+    <td><input type="number" min="0" step="any" class="cell-input cell-num"
+      data-trip="${tid}" data-trip-field="km" value="${num(t.km) || ""}" placeholder="0"/></td>
+    <td><input type="number" min="0" step="any" class="cell-input cell-num"
+      data-trip="${tid}" data-trip-field="revenuePerHour" value="${num(t.revenuePerHour) || ""}" placeholder="0"/></td>
+    <td>${sel("vehicleType", t.vehicleType || "", VEHICLE_TYPES)}</td>
+    <td class="ruter-cell"><span class="time-pair">
+      <input type="number" min="0" step="1" class="cell-input cell-num cell-ruter"
+        data-trip="${tid}" data-trip-field="antallRuter" value="${needed || ""}" placeholder="–"/>${ruterBadge}
+    </span></td>
     <td class="row-actions">
-      <button class="btn small" data-action="edit-trip" data-id="${esc(
-        t.id
-      )}">Rediger</button>
-      <button class="btn small ghost danger" data-action="del-trip" data-id="${esc(
-        t.id
-      )}">Slett</button>
+      <button class="btn small" data-action="edit-trip" data-id="${tid}">Rediger</button>
+      <button class="btn small ghost danger" data-action="del-trip" data-id="${tid}">Slett</button>
     </td>
   </tr>`;
 }
@@ -1163,6 +1213,30 @@ app.addEventListener("change", (e) => {
     selectDepartment(sel.value);
     selectedCarId = "__dep__";
     renderApp();
+    return;
+  }
+  // Inline-redigering i Rutemaster-tabellen
+  const inp = e.target.closest("[data-trip-field]");
+  if (inp) {
+    const dep = selectedDepartment();
+    const trip = dep?.trips.find((x) => x.id === inp.dataset.trip);
+    if (!trip) return;
+    const field = inp.dataset.tripField;
+    const val = inp.value.trim();
+    if (field === "carId") {
+      updateTrip(dep, trip.id, { carIds: val ? [val] : [] });
+    } else if (field === "startTime" || field === "endTime") {
+      if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(val)) {
+        renderContent(); // ugyldig tid — rull tilbake til lagret verdi
+        return;
+      }
+      updateTrip(dep, trip.id, { [field]: val.padStart(5, "0") });
+    } else if (field === "km" || field === "revenuePerHour" || field === "antallRuter") {
+      updateTrip(dep, trip.id, { [field]: num(val) });
+    } else {
+      updateTrip(dep, trip.id, { [field]: val });
+    }
+    renderContent();
   }
 });
 
@@ -1232,6 +1306,31 @@ app.addEventListener("click", async (e) => {
       addTrip(dep, res);
       renderContent();
     }
+  } else if (action === "quick-add-trip" && dep) {
+    addTrip(dep, {
+      customer: `Rute ${nextTripNumber(dep.trips)}`,
+      type: "fast_rute",
+      staffing: "enkelt",
+      vehicleType: "",
+      carIds: [],
+      antallRuter: 1,
+      startTime: "08:00",
+      endTime: "16:00",
+      days: [0, 1, 2, 3, 4],
+      km: 0,
+      revenuePerHour: 0,
+      color: TRIP_COLORS[(dep.trips.length || 0) % TRIP_COLORS.length]
+    });
+    renderContent();
+  } else if (action === "toggle-trip-day" && dep) {
+    const trip = dep.trips.find((x) => x.id === t.dataset.id);
+    if (!trip) return;
+    const day = Number(t.dataset.day);
+    const days = new Set(trip.days || []);
+    if (days.has(day)) days.delete(day);
+    else days.add(day);
+    updateTrip(dep, trip.id, { days: [...days].sort((a, b) => a - b) });
+    renderContent();
   } else if (action === "edit-trip" && dep) {
     const trip = dep.trips.find((x) => x.id === t.dataset.id);
     if (!trip) return;
@@ -1679,6 +1778,16 @@ function nextCarNumber(cars) {
   let max = 0;
   (cars || []).forEach((c) => {
     const m = /^bil\s+(\d+)$/i.exec((c.regNr || "").trim());
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return max + 1;
+}
+
+// Neste ledige nummer for hurtiglagte ruter («Rute 1», «Rute 2», …).
+function nextTripNumber(trips) {
+  let max = 0;
+  (trips || []).forEach((t) => {
+    const m = /^rute\s+(\d+)$/i.exec((t.customer || "").trim());
     if (m) max = Math.max(max, Number(m[1]));
   });
   return max + 1;

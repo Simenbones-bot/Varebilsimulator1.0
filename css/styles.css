@@ -648,6 +648,61 @@ code {
   border-radius: 999px;
 }
 
+/* Inline-redigering i Rutemaster ------------------------------------------- */
+.trip-table th,
+.trip-table td { padding: .4rem .5rem; }
+.cell-input {
+  font: inherit;
+  font-size: .85rem;
+  color: var(--text);
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+  padding: .25rem .35rem;
+  width: 100%;
+  min-width: 0;
+}
+.cell-input:hover { border-color: var(--border); background: #fff; }
+.cell-input:focus {
+  border-color: var(--primary);
+  background: #fff;
+  outline: 2px solid color-mix(in srgb, var(--primary) 25%, transparent);
+}
+select.cell-input { width: auto; max-width: 130px; cursor: pointer; }
+.cell-num { width: 64px; text-align: right; }
+.cell-time { width: 58px; text-align: center; }
+.cell-ruter { width: 52px; }
+.time-pair {
+  display: flex;
+  align-items: center;
+  gap: .2rem;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.day-chips { display: inline-flex; gap: .18rem; }
+.day-chip {
+  width: 23px;
+  height: 23px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.day-chip:hover { border-color: var(--primary); color: var(--primary); }
+.day-chip.on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.add-row td { padding: 0; border-bottom: none; background: #fafbfe; }
+.add-row .gantt-add { width: 100%; }
+
 /* Modal -------------------------------------------------------------------- */
 .overlay {
   position: fixed;
