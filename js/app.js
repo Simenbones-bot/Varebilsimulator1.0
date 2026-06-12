@@ -50,7 +50,8 @@ import {
   norwegianHolidays,
   workingDaysInMonth,
   effectiveDriverRate,
-  socialRatePct
+  socialRatePct,
+  paidHours
 } from "./utils.js";
 
 const app = document.getElementById("app");
@@ -658,7 +659,7 @@ function renderSummary(dep) {
     const staffMult = t.staffing === "dobbel" ? 2 : 1;
     weekKm += num(t.km) * occ * m;
     weekRevenue += hours * num(t.revenuePerHour) * occ * m;
-    weekDriverHours += hours * occ * m * staffMult;
+    weekDriverHours += paidHours(t.startTime, t.endTime) * occ * m * staffMult;
     assigned.forEach((c) => {
       const price =
         c.fuelType === "el"
@@ -727,7 +728,8 @@ function renderSummary(dep) {
       ])],
     ["Personal (sjåfør)", `${fmtKr(personnelMonth)} /mnd`,
       tipRows([
-        ["Formel", "sjåførtimer/uke × effektiv sats × 52/12"],
+        ["Formel", "betalte sjåførtimer/uke × effektiv sats × 52/12"],
+        ["Lunsj", "30 min ubetalt trekkes pr. vakt over 5,5 t"],
         ["Grunnlag", "1 950 t/år (37,5 t/uke × 52 uker) → 163 t/mnd pr. FTE"],
         ["Effektiv sats", `sjåførsats × (1 + ${socialPct} % sosiale)${num(p.sickRate) ? ` × (1 + ${num(p.sickRate)} % sykefravær)` : ""}`],
         ["Dobbel", "Dobbel bemanning teller 2×"]
@@ -747,7 +749,8 @@ function renderSummary(dep) {
         ["Driftsbase", driftsbaseTekst]
       ])],
     ["Totalt årsverk", `${totalFte.toFixed(2)} å.v.`,
-      tipRows([["Formel", "sjåførtimer/uke / 37,5 + Σ ledelse-årsverk + Σ koordinator-årsverk"]])],
+      tipRows([["Formel", "betalte sjåførtimer/uke / 37,5 + Σ ledelse-årsverk + Σ koordinator-årsverk"],
+      ["Lunsj", "30 min ubetalt trekkes pr. vakt over 5,5 t (8 t vakt = 7,5 t)"]])],
     ["Km pr. uke", `${fmtNum(weekKm)} km`,
       tipRows([["Formel", "Σ (km × dager × antall biler) pr. kjøring"]])],
     ["Inntekt pr. uke", fmtKr(weekRevenue),
@@ -776,7 +779,7 @@ function renderSummary(dep) {
       const staffMult = t.staffing === "dobbel" ? 2 : 1;
       const price = selCar.fuelType === "el" ? num(fuel.electricityPrice) : num(fuel.dieselPrice);
       carRevWeek        += hours * num(t.revenuePerHour) * occ;
-      carDriverHoursWeek += hours * occ * staffMult;
+      carDriverHoursWeek += paidHours(t.startTime, t.endTime) * occ * staffMult;
       carFuelWeek        += num(t.km) * occ * (num(selCar.consumption) / 100) * price;
     });
     fRevMonth   = carRevWeek * MONTH_FACTOR;
@@ -923,7 +926,7 @@ function renderSummary(dep) {
       </div>
       <div class="stat">
         <span>🧑‍✈️ Sjåfør /mnd${infoIcon(tipRows([
-          ["Formel", "sjåførtimer/uke × effektiv sats × 52/12"],
+          ["Formel", "betalte sjåførtimer/uke × effektiv sats × 52/12"],
           ["Effektiv sats", `${fmtKr(effectiveRate)} (inkl. sosiale${num(p.sickRate) ? " + sykefravær" : ""})`]
         ]))}</span>
         <strong>${fmtKr(driverCostMonth)}</strong>
@@ -969,7 +972,7 @@ function depWeeklyFinancials(dep) {
     const m = Math.max(assigned.length, 1);
     const staffMult = t.staffing === "dobbel" ? 2 : 1;
     weekRevenue += hours * num(t.revenuePerHour) * occ * m;
-    weekDriverHours += hours * occ * m * staffMult;
+    weekDriverHours += paidHours(t.startTime, t.endTime) * occ * m * staffMult;
     assigned.forEach((c) => {
       const price =
         c.fuelType === "el" ? num(fuel.electricityPrice) : num(fuel.dieselPrice);
@@ -1273,7 +1276,7 @@ function renderPersonnel(el, dep) {
     const hours = durationMinutes(t.startTime, t.endTime) / 60;
     const staffMult = t.staffing === "dobbel" ? 2 : 1;
     const m = Math.max(tripCarIds(t).filter((id) => (dep.cars || []).find((c) => c.id === id)).length, 1);
-    weekDriverHours += hours * occ * m * staffMult;
+    weekDriverHours += paidHours(t.startTime, t.endTime) * occ * m * staffMult;
   });
   const driverFte = weekDriverHours / 37.5;
   const lederFte = ledere.reduce((s, l) => s + num(l.aarsrverk), 0);

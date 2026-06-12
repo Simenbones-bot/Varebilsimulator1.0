@@ -70,6 +70,14 @@ export function durationMinutes(start, end) {
   return e > s ? e - s : 1440 - s + e;
 }
 
+// Betalte sjåførtimer for en vakt: 30 min ubetalt lunsj trekkes fra
+// vakter lengre enn 5,5 timer (jf. arbeidsmiljølovens pausegrense).
+// Slik blir en 8-timersvakt 7,5 betalte timer → 40 t vakt/uke = 1 årsverk.
+export function paidHours(start, end) {
+  const h = durationMinutes(start, end) / 60;
+  return h > 5.5 ? h - 0.5 : h;
+}
+
 export function fmtKr(n) {
   const num = Number(n) || 0;
   return num.toLocaleString("no-NO", { maximumFractionDigits: 0 }) + " kr";

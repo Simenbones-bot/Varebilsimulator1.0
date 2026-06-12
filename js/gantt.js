@@ -12,7 +12,8 @@ import {
   MONTH_FACTOR,
   infoIcon,
   tipRows,
-  effectiveDriverRate
+  effectiveDriverRate,
+  paidHours
 } from "./utils.js";
 
 const TOTAL_MINS = 10080; // 7 × 1440
@@ -37,7 +38,7 @@ function carCostPerHour(car, trips, dep) {
     const h = durationMinutes(t.startTime, t.endTime) / 60;
     const staffMult = t.staffing === "dobbel" ? 2 : 1;
     hoursWeek += h * occ;
-    driverWeek += h * occ * staffMult * eff;
+    driverWeek += paidHours(t.startTime, t.endTime) * occ * staffMult * eff;
     revenueWeek += h * occ * (Number(t.revenuePerHour) || 0);
     const price =
       car.fuelType === "el"
@@ -75,7 +76,7 @@ function tripSpecificCostPerHour(trip, car, dep, totalMonthHours) {
       ? Number(fuel.electricityPrice) || 0
       : Number(fuel.dieselPrice) || 0;
 
-  const driverPerHour = staffMult * eff;
+  const driverPerHour = staffMult * eff * (paidHours(trip.startTime, trip.endTime) / hours);
   const fuelPerHour =
     ((Number(trip.km) || 0) * ((Number(car.consumption) || 0) / 100) * price) /
     hours;
@@ -189,7 +190,10 @@ function renderWeekHeader() {
   }).join("");
 
   const utilTip = tipRows([["Formel", "bookede minutter / (7 × 1440) × 100 %"]]);
-  const fteTip = tipRows([["Formel", "bilens timer/uke (inkl. dobbel-faktor) / 37,5"]]);
+  const fteTip = tipRows([
+    ["Formel", "bilens betalte timer/uke (inkl. dobbel-faktor) / 37,5"],
+    ["Lunsj", "30 min ubetalt trekkes pr. vakt over 5,5 t (8 t vakt = 7,5 t)"]
+  ]);
   const costTip = tipRows([
     ["Formel", "(sjåfør + bil + drivstoff /mnd) / bookede timer /mnd"],
     ["Påslag", "× (1 + konsernfelles % + margin %)"]
@@ -245,7 +249,7 @@ export function renderGantt(dep, expanded = false) {
       const carFteWeekly = carTrips.reduce((s, t) => {
         const h = durationMinutes(t.startTime, t.endTime) / 60;
         const staffMult = t.staffing === "dobbel" ? 2 : 1;
-        return s + h * (t.days || []).length * staffMult;
+        return s + paidHours(t.startTime, t.endTime) * (t.days || []).length * staffMult;
       }, 0);
       const carFte = carFteWeekly / 37.5;
       if (carFte > 0) { totalFte += carFte; fteCount++; }
