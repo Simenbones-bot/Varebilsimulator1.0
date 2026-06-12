@@ -25,7 +25,7 @@ function tripCarIds(t) {
 }
 
 function carCostPerHour(car, trips, dep) {
-  const eff = effectiveDriverRate(dep.personnel || { driverRate: 250, socialRate: 36 });
+  const eff = effectiveDriverRate(dep.personnel || { driverRate: 250 });
   const fuel = dep.fuel || {};
   let hoursWeek = 0;
   let driverWeek = 0;
@@ -66,7 +66,7 @@ function tripSpecificCostPerHour(trip, car, dep, totalMonthHours) {
   const hours = durationMinutes(trip.startTime, trip.endTime) / 60;
   if (hours === 0 || totalMonthHours === 0) return null;
 
-  const eff = effectiveDriverRate(dep.personnel || { driverRate: 250, socialRate: 36 });
+  const eff = effectiveDriverRate(dep.personnel || { driverRate: 250 });
   const staffMult = trip.staffing === "dobbel" ? 2 : 1;
 
   const fuel = dep.fuel || {};

@@ -35,9 +35,13 @@ function normalizeDepartment(dep) {
     dep.fuel = { dieselPrice: 0, electricityPrice: 0 };
   }
   if (!dep.personnel || typeof dep.personnel !== "object") {
-    dep.personnel = { driverRate: 250, socialRate: 36 };
+    dep.personnel = { driverRate: 250 };
   }
   if (dep.personnel.sickRate === undefined) dep.personnel.sickRate = 0;
+  // Sosiale kostnader delt i feriepenger + pensjon (standard 12 % + 7,5 %).
+  if (dep.personnel.holidayRate === undefined) dep.personnel.holidayRate = 12;
+  if (dep.personnel.pensionRate === undefined) dep.personnel.pensionRate = 7.5;
+  delete dep.personnel.socialRate;
   if (!dep.markups || typeof dep.markups !== "object") {
     dep.markups = { konsernfelles: 6, margin: 5 };
   }
@@ -95,7 +99,7 @@ export function addDepartment(name) {
     trips: [],
     fixedCosts: [],
     fuel: { dieselPrice: 0, electricityPrice: 0 },
-    personnel: { driverRate: 250, socialRate: 36, sickRate: 0, ledere: [], koordinatorer: [] },
+    personnel: { driverRate: 250, holidayRate: 12, pensionRate: 7.5, sickRate: 0, ledere: [], koordinatorer: [] },
     markups: { konsernfelles: 6, margin: 5 }
   };
   State.data.departments.push(dep);

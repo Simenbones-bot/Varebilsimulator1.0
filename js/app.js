@@ -49,7 +49,8 @@ import {
   MONTHS_LONG,
   norwegianHolidays,
   workingDaysInMonth,
-  effectiveDriverRate
+  effectiveDriverRate,
+  socialRatePct
 } from "./utils.js";
 
 const app = document.getElementById("app");
@@ -336,7 +337,7 @@ function renderOnboarding(dep) {
 // slik at man slipper å bytte fane for å justere simuleringen.
 function renderAssumptions(dep) {
   const fuel = dep.fuel || {};
-  const p = dep.personnel || { driverRate: 250, socialRate: 36 };
+  const p = dep.personnel || { driverRate: 250 };
   const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
   const cars = dep.cars || [];
   const hasDieselCar = cars.some((c) => c.fuelType !== "el");
@@ -349,7 +350,7 @@ function renderAssumptions(dep) {
     ${chip("Diesel", num(fuel.dieselPrice) ? `${fmtDec(fuel.dieselPrice)} kr/l` : "ikke satt", "edit-fuel", hasDieselCar && !num(fuel.dieselPrice))}
     ${chip("Strøm", num(fuel.electricityPrice) ? `${fmtDec(fuel.electricityPrice)} kr/kWh` : "ikke satt", "edit-fuel", hasElCar && !num(fuel.electricityPrice))}
     ${chip("Sjåførsats", `${fmtDec(p.driverRate)} kr/t`, "edit-personnel", !num(p.driverRate))}
-    ${chip("Sosiale", `${fmtDec(p.socialRate)} %`, "edit-personnel")}
+    ${chip("Sosiale", `${fmtDec(socialRatePct(p))} %`, "edit-personnel")}
     ${chip("Sykefravær", `${fmtDec(p.sickRate)} %`, "edit-personnel")}
     ${chip("Konsernfelles", `${fmtDec(mkp.konsernfelles)} %`, "edit-markups")}
     ${chip("Margin", `${fmtDec(mkp.margin)} %`, "edit-markups")}
@@ -504,7 +505,7 @@ function tripRow(t, dep) {
 function renderSummary(dep) {
   const cars = dep.cars || [];
   const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
-  const p = dep.personnel || { driverRate: 250, socialRate: 36 };
+  const p = dep.personnel || { driverRate: 250 };
   const effectiveRate = effectiveDriverRate(p);
   const carCost = cars.reduce((s, c) => s + carMonthly(c), 0);
   const fixedCost = (dep.fixedCosts || []).reduce(
@@ -537,7 +538,7 @@ function renderSummary(dep) {
   const fuelMonth = fuelWeek * MONTH_FACTOR;
   const personnelMonth = weekDriverHours * effectiveRate * (52 / 12);
   const monthRevenue = weekRevenue * MONTH_FACTOR;
-  const socialFactor = 1 + num(p.socialRate) / 100;
+  const socialFactor = 1 + socialRatePct(p) / 100;
   const lederMonth = (dep.personnel.ledere || []).reduce(
     (s, l) => s + (num(l.aarslonn) * num(l.aarsrverk)) / 12 * socialFactor, 0);
   const koordinatorMonth = (dep.personnel.koordinatorer || []).reduce(
@@ -555,7 +556,7 @@ function renderSummary(dep) {
   const lederFte = (dep.personnel.ledere || []).reduce((s, l) => s + num(l.aarsrverk), 0);
   const koordinatorFte = (dep.personnel.koordinatorer || []).reduce((s, k) => s + num(k.aarsrverk), 0);
   const totalFte = driverFte + lederFte + koordinatorFte;
-  const socialPct = num(p.socialRate);
+  const socialPct = socialRatePct(p);
   const konsPct = num(mkp.konsernfelles);
   const marginPct = num(mkp.margin);
   const mf = MONTH_FACTOR.toFixed(2);
@@ -769,10 +770,10 @@ function renderSummary(dep) {
 function depWeeklyFinancials(dep) {
   const cars = dep.cars || [];
   const fuel = dep.fuel || { dieselPrice: 0, electricityPrice: 0 };
-  const p = dep.personnel || { driverRate: 250, socialRate: 36 };
+  const p = dep.personnel || { driverRate: 250 };
   // Grunnsats uten sykefravær — scenarioet i årssimuleringen styrer fraværet.
-  const effectiveRateBase = num(p.driverRate) * (1 + num(p.socialRate) / 100);
-  const socialFactor = 1 + num(p.socialRate) / 100;
+  const effectiveRateBase = num(p.driverRate) * (1 + socialRatePct(p) / 100);
+  const socialFactor = 1 + socialRatePct(p) / 100;
   const carCostMonth = cars.reduce((s, c) => s + carMonthly(c), 0);
   const fixedCostMonth = (dep.fixedCosts || []).reduce((s, f) => s + num(f.amount), 0);
   let weekRevenue = 0, fuelWeek = 0, weekDriverHours = 0;
@@ -1071,9 +1072,9 @@ function renderFuel(el, dep) {
 
 // ---- Personal --------------------------------------------------------------
 function renderPersonnel(el, dep) {
-  const p = dep.personnel || { driverRate: 250, socialRate: 36 };
+  const p = dep.personnel || { driverRate: 250 };
   const effectiveRate = effectiveDriverRate(p);
-  const socialFactor = 1 + num(p.socialRate) / 100;
+  const socialFactor = 1 + socialRatePct(p) / 100;
   const mkp = dep.markups || { konsernfelles: 6, margin: 5 };
   const ledere = dep.personnel.ledere || [];
   const koordinatorer = dep.personnel.koordinatorer || [];
@@ -1130,12 +1131,14 @@ function renderPersonnel(el, dep) {
     </div>
     <div class="summary">
       <div class="stat"><span>Sjåfør pr. time</span><strong>${fmtKr(p.driverRate)}</strong></div>
-      <div class="stat"><span>Sosiale kostnader</span><strong>${num(p.socialRate)} %</strong></div>
+      <div class="stat"><span>Feriepenger</span><strong>${fmtDec(p.holidayRate)} %</strong></div>
+      <div class="stat"><span>Pensjon/sosiale</span><strong>${fmtDec(p.pensionRate)} %</strong></div>
+      <div class="stat"><span>Sosiale totalt</span><strong>${fmtDec(socialRatePct(p))} %</strong></div>
       <div class="stat"><span>Sykefravær</span><strong>${fmtDec(p.sickRate)} %</strong></div>
       <div class="stat"><span>Effektiv timesats</span><strong>${fmtKr(effectiveRate)}</strong></div>
     </div>
     <div class="card" style="margin-top:1rem;font-size:.9rem;color:var(--muted)">
-      Effektiv timesats = sjåfør × (1 + sosiale kostnader %) × (1 + sykefravær %).
+      Effektiv timesats = sjåfør × (1 + feriepenger % + pensjon/sosiale %) × (1 + sykefravær %).
       Sykefravær er et påslag på sjåførkostnaden (syk sjåfør + vikar).<br>
       Personalkostnad pr. måned beregnes automatisk fra alle kjøringer og vises i oppsummeringen.
     </div>
@@ -1741,10 +1744,11 @@ function fixedCostModal(item) {
 }
 
 function personnelModal(personnel) {
-  const p = personnel || { driverRate: 250, socialRate: 36 };
+  const p = personnel || { driverRate: 250 };
   return modal("Personalkostnader", [
     { name: "driverRate", label: "Sjåfør pr. time (kr/t)", type: "number", value: p.driverRate },
-    { name: "socialRate", label: "Sosiale kostnader (%)", type: "number", value: p.socialRate },
+    { name: "holidayRate", label: "Feriepenger (%)", type: "number", value: p.holidayRate ?? 12 },
+    { name: "pensionRate", label: "Pensjon/sosiale (%)", type: "number", value: p.pensionRate ?? 7.5 },
     { name: "sickRate", label: "Sykefravær (%)", type: "number", value: p.sickRate ?? 0 }
   ]);
 }
