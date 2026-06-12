@@ -585,6 +585,26 @@ code {
 .wf-dec    { background: var(--danger); opacity: .85; }
 .wf-pos    { background: var(--ok); }
 .wf-neg    { background: var(--danger); }
+/* Kategorifarger som matcher tredelingen av driftskostnad */
+.wf-veh      { background: #0891b2; }
+.wf-driver   { background: #db2777; }
+.wf-office   { background: #d97706; }
+.wf-overhead { background: #94a3b8; }
+.wf-pct {
+  font-size: .68rem;
+  color: var(--muted);
+  margin-bottom: .3rem;
+  line-height: 1;
+}
+.wf-conn {
+  position: absolute;
+  left: -.65rem;
+  width: .65rem;
+  border-top: 2px dashed #b6bdd0;
+  z-index: 1;
+  pointer-events: none;
+}
+.wf-track { cursor: default; }
 .wf-label {
   font-size: .74rem;
   color: var(--text);

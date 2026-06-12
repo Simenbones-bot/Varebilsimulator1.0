@@ -805,26 +805,31 @@ function renderSummary(dep) {
     fMarginCut  = marginMonth;
   }
 
-  // Waterfall: Inntekt (total) → fratrekk-trinn → Overskudd (total)
+  // Waterfall: Inntekt (total) → fratrekk-trinn → Overskudd (total).
+  // Trinn med 0 kr hoppes over; kategoriene har egne farger og ikoner.
   const cuts = [
-    ["Kjøretøy", fVehCut],
-    ["Sjåfør", fDriverCut],
-    ...(fOfficeCut > 0 ? [["Kontor/ledelse", fOfficeCut]] : []),
-    ["Konsernfelles", fKonsCut],
-    ["Påslag", fMarginCut]
-  ];
+    ["Kjøretøy", fVehCut, "wf-veh", "🚐"],
+    ["Sjåfør", fDriverCut, "wf-driver", "🧑‍✈️"],
+    ["Kontor/ledelse", fOfficeCut, "wf-office", "🏢"],
+    ["Konsernfelles", fKonsCut, "wf-overhead", ""],
+    ["Påslag", fMarginCut, "wf-overhead", ""]
+  ].filter(([, v]) => v > 0);
   let level = fRevMonth;
   const wfSteps = [
-    { label: "Inntekt", kind: "start", value: fRevMonth, lo: 0, hi: fRevMonth }
+    { label: "Inntekt", kind: "start", value: fRevMonth, lo: 0, hi: fRevMonth, cls: "wf-start", ico: "📈" }
   ];
-  cuts.forEach(([label, v]) => {
-    wfSteps.push({ label, kind: "dec", value: v, lo: level - v, hi: level });
+  cuts.forEach(([label, v, cls, ico]) => {
+    wfSteps.push({ label, kind: "dec", value: v, lo: level - v, hi: level, conn: level, cls, ico });
     level -= v;
   });
   fResult = level;
   wfSteps.push({
-    label: "Overskudd", kind: "result", value: fResult,
-    lo: Math.min(0, fResult), hi: Math.max(0, fResult)
+    label: fResult >= 0 ? "Overskudd" : "Underskudd",
+    kind: "result", value: fResult,
+    lo: Math.min(0, fResult), hi: Math.max(0, fResult),
+    conn: fResult,
+    cls: fResult >= 0 ? "wf-pos" : "wf-neg",
+    ico: fResult >= 0 ? "✅" : "⚠️"
   });
   const chartMax = Math.max(fRevMonth, 0);
   const chartMin = Math.min(0, ...wfSteps.map((s) => s.lo));
@@ -833,26 +838,36 @@ function renderSummary(dep) {
   const zeroBar = chartMin < 0
     ? `<div class="wf-zero" style="bottom:${yPct(0).toFixed(2)}%"></div>`
     : "";
-  const wfHtml = wfSteps.map((s) => {
+  const wfHtml = wfSteps.map((s, i) => {
     const bottom = yPct(Math.min(s.lo, s.hi));
     const rawH = Math.abs(yPct(s.hi) - yPct(s.lo));
     const height = Math.max(rawH, 1.5);
-    const barCls =
-      s.kind === "dec" ? "wf-bar wf-dec"
-      : s.kind === "result" ? (s.value >= 0 ? "wf-bar wf-pos" : "wf-bar wf-neg")
-      : "wf-bar wf-start";
     const valTxt = s.kind === "dec" ? `−${fmtKr(s.value)}` : fmtKr(s.value);
     const valCls =
       s.kind === "dec" ? "wf-val neg"
       : s.kind === "result" ? (s.value >= 0 ? "wf-val pos" : "wf-val neg")
       : "wf-val";
+    const pct = fRevMonth > 0 && s.kind !== "start"
+      ? Math.round((Math.abs(s.value) / fRevMonth) * 100)
+      : null;
+    const tip = esc(tipRows([
+      [esc(s.label), valTxt],
+      ...(pct !== null ? [["Andel av inntekt", `${pct} %`]] : []),
+      ...(s.kind === "dec" ? [["Nivå etter trinn", fmtKr(s.lo)]] : [])
+    ]));
+    // Stiplet forbindelseslinje over gapet fra forrige søyles sluttnivå.
+    const conn = i > 0
+      ? `<div class="wf-conn" style="bottom:${yPct(s.conn).toFixed(2)}%"></div>`
+      : "";
     return `<div class="wf-col">
         <div class="${valCls}">${valTxt}</div>
-        <div class="wf-track">
+        <div class="wf-pct">${pct !== null ? `${pct} %` : "&nbsp;"}</div>
+        <div class="wf-track" data-tip="${tip}">
           ${zeroBar}
-          <div class="${barCls}" style="bottom:${bottom.toFixed(2)}%;height:${height.toFixed(2)}%"></div>
+          ${conn}
+          <div class="wf-bar ${s.cls}" style="bottom:${bottom.toFixed(2)}%;height:${height.toFixed(2)}%"></div>
         </div>
-        <div class="wf-label">${esc(s.label)}</div>
+        <div class="wf-label">${s.ico ? `${s.ico} ` : ""}${esc(s.label)}</div>
       </div>`;
   }).join("");
 
